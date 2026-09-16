@@ -66,6 +66,7 @@ A full specification is "Ready for Development" when:
 - **Logical**: Tasks ordered by dependency.
 - **Testable**: All ACs use Given/When/Then.
 - **Surface-anchored**: ACs observe the outermost surface the intent references — never a more internal proxy for it.
+- **Observable**: A story that renders a surface a person looks at carries a `## Visual Contract` whose every row can be settled by looking at one capture; a story that renders nothing says so rather than leaving the section empty.
 - **Complete**: No placeholders or TBDs.
 - **Sufficient**: No known requirement, acceptance, dependency, or implementation gaps remain unresolved.
 - **Coherent**: No unresolved ambiguities or internal contradictions.

@@ -48,6 +48,24 @@ context: [] # optional: `{project-root}/`-prefixed paths to project-wide standar
 
 </frozen-after-approval>
 
+## Visual Contract
+
+<!-- ONLY for a story that renders something a person looks at. If this story draws nothing,
+     DELETE THIS ENTIRE SECTION. Do not write "N/A" or "None".
+     Every row is a claim a person (or a vision model) can settle by LOOKING at one capture of
+     the surface — never a coordinate, a hex value, a scale factor or a z-order. Those belong in
+     Tasks & Acceptance as field assertions, because an image cannot settle them.
+     Transcribe from the design sources the intent names; do not invent. A missing or
+     self-contradictory design source is an intent gap, not something to decide here. -->
+
+**Surface:** SURFACE_NAME · **Fixture on screen:** FIXTURE_AND_WHAT_IT_PUTS_THERE
+**Out of scope — absent is correct:** WHAT_LATER_WORK_OWNS
+
+| # | Observable claim | Source |
+|---|------------------|--------|
+| V1 | WHAT_A_LOOKER_MUST_BE_ABLE_TO_SEE | design source reference |
+| V2 | WHAT_A_LOOKER_MUST_BE_ABLE_TO_SEE | design source reference |
+
 ## Code Map
 
 <!-- Agent-populated during planning. Annotated paths prevent blind codebase searching.

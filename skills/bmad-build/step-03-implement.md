@@ -42,6 +42,16 @@ Stage the diff and read it first: using the repository's version-control tooling
 
 If the implementer reported anything unfinished, finish it before proceeding — and when that changes code, rewrite `{diff_file}` and re-read it. Acceptance criteria are judged at review, not here.
 
+### Visual Contract Audit
+
+If `{spec_file}` contains a `## Visual Contract`, capture the surface it names and settle **every** row against that capture — by the project's visual-judge command if it has one, otherwise by reading the capture yourself. Each row ends at one of three verdicts, and none may be left unstated:
+
+- **satisfied** — record it.
+- **violated** — fix it, re-capture, and settle the row again. A violated row is never carried forward.
+- **cannot-tell** — the image genuinely cannot settle this claim. Name the field assertion that does settle it, add that assertion under `## Tasks & Acceptance`, and make it run. `cannot-tell` with no assertion named is an unaudited claim and counts as missing.
+
+Judge the capture, never your intent or an implementation subagent's report. If the audit cannot be satisfied, HALT with status `blocked` and blocking condition `visual contract audit failed`.
+
 ### Matrix Test Audit
 
 If `{spec_file}`'s `<frozen-after-approval>` block contains an I/O & Edge-Case Matrix, verify every matrix row is covered by at least one test that verifies its expected behavior, and that each covering test ran and passed in the verification output. A covering test that exists but did not run — unregistered, filtered out, skipped, or disabled — counts as missing. If a test disagrees with the matrix, never edit the expectation to match the code: fix the code, or if the matrix row itself is ambiguous, HALT and ask the human. Fix any other audit failure before proceeding.

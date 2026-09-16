@@ -57,6 +57,7 @@ Load {planning_artifacts}/epics.md and review:
 4. **Logical Flow**: Natural progression from user's perspective
 5. **Dependency-Free Within Epic**: Stories within an epic must NOT depend on future stories
 6. **Implementation Efficiency**: Consider consolidating epics that all modify the same core files into fewer epics
+7. **Provable Surfaces**: If an epic ships anything a person looks at, state once — in the epic, for the stories to inherit — how each such story proves its surface. Prefer claims a person can settle by looking at one capture ("the goods read as sitting on the shelf, not floating") over coordinate- or pixel-level assertions: a named sample point only ever checks the one thing somebody thought to sample, and it has to be rediscovered every time the layout moves. Anything whose truth is a number the eye cannot read — an exact scale, an exact colour, a z-order — is a field assertion, not a visual claim.
 
 **⚠️ CRITICAL PRINCIPLE:**
 Organize by USER VALUE, not technical layers:
