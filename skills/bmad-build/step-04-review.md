@@ -84,17 +84,21 @@ Write `lenses_ran` — the ids launched, in launch order — to `{spec_file}` fr
 4. Process entries in cascading order. If intent_gap or bad_spec entries exist, they trigger a loopback — lower entries are moot since code will be re-derived. If neither exists, process patch and defer normally. Before each loopback, read `{spec_file}` frontmatter `review_loop_iteration` (missing means `0`), increment it by 1, and write it back. If it exceeds 5, HALT and escalate to the human.
    - **intent_gap** — Root cause is inside `<frozen-after-approval>`. Revert code changes. Loop back to the human to resolve. Once resolved, read fully and follow `{{ rendered("step-02-plan.md") }}` to re-run steps 2–4.
    - **bad_spec** — Root cause is outside `<frozen-after-approval>`. Before reverting code: extract KEEP instructions for positive preservation (what worked well and must survive re-derivation). Revert code changes. Read the `## Spec Change Log` in `{spec_file}` and strictly respect all logged constraints when amending the non-frozen sections that contain the root cause. Append a new change-log entry recording: the triggering finding, what was amended, the known-bad state avoided, and the KEEP instructions. Read fully and follow `{{ rendered("step-03-implement.md") }}` to re-derive the code, then this step will run again.
-   - **patch** — Auto-fix. These are the only findings that survive loopbacks. Re-engage the step-03 implementation subagent — the same one, addressed by the name or id its launch returned; a fresh launch is not re-engagement. Send it one message, exactly this, with the findings filled in:
+   - **patch** — Auto-fix. These are the only findings that survive loopbacks. Launch a subagent with no prior conversation context, running on the Sonnet model, and wait for it synchronously. Give it exactly this message, with the findings filled in and `{spec_file}` / `{diff_file}` substituted:
 
      ```text
      Review of your implementation found problems. Fix each one below with the smallest change that does the job.
 
-     Run only the tests that cover the files you edit — nothing wider. Full verification runs on my side after you return. Reply with what you changed.
+     Read {spec_file} — the sections `## Boundaries & Constraints`, `## Code Map`, `## Design Notes`, `## Spec Change Log`, and the `## Tasks & Acceptance` entries for the files named below. The unified diff of the change under review is at {diff_file}. Read every file you are about to change from disk before you change it — the diff is history, disk is truth.
+
+     Run only the tests that cover the files you edit — nothing wider. Full verification runs on my side after you return. Before you reply, append to {spec_file}'s `## Spec Change Log` every decision a later reader could not re-derive from the code, and every approach you ruled out.
+
+     Reply with what you changed, the tests you ran and their results, and anything you could not close.
 
      - <file> — <what is wrong> — <what the smallest fix must do>
      ```
 
-     If it cannot be continued, apply the patches yourself. Then re-run the checks in `{spec_file}`'s `## Verification` section, if present — the patches changed code after the implementer's verification; if verification fails and the failure cannot be fixed, HALT and escalate to the human. Rewrite `{diff_file}` so it reflects the patched tree.
+     If the host cannot launch a subagent, apply the patches yourself. Then re-run the checks in `{spec_file}`'s `## Verification` section, if present — the patches changed code after the implementer's verification; if verification fails and the failure cannot be fixed, HALT and escalate to the human. Rewrite `{diff_file}` so it reflects the patched tree.
    - **defer** — Append one new entry to `{{ config.implementation_artifacts }}/deferred-work.md` using this format. Do not modify existing entries or look for duplicates.
      ```markdown
      - source_spec: `{spec_file}`

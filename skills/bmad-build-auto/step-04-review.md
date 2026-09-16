@@ -110,23 +110,27 @@ Write `lenses_ran` — the ids launched, in launch order — to `{spec_file}` fr
      Apply the patches yourself.
 {% else %}
   {% if workflow.route == "full" %}
-     Re-engage the step-03 implementation subagent — the same one, addressed by the name or id its launch returned; a fresh launch is not re-engagement. Send it one message, exactly this, with the findings filled in:
+     Launch a subagent with no prior conversation context, running on the Sonnet model, and wait for it synchronously. Give it exactly this message, with the findings filled in and `{spec_file}` / `{diff_file}` substituted:
   {% else %}
-     On the full route, re-engage the step-03 implementation subagent — the same one, addressed by the name or id its launch returned; a fresh launch is not re-engagement. Send it one message, exactly this, with the findings filled in:
+     On the full route, launch a subagent with no prior conversation context, running on the Sonnet model, and wait for it synchronously. Give it exactly this message, with the findings filled in and `{spec_file}` / `{diff_file}` substituted:
   {% endif %}
 
      ```text
      Review of your implementation found problems. Fix each one below with the smallest change that does the job.
 
-     Run only the tests that cover the files you edit — nothing wider. Full verification runs on my side after you return. Reply with what you changed.
+     Read {spec_file} — the sections `## Boundaries & Constraints`, `## Code Map`, `## Design Notes`, `## Spec Change Log`, and the `## Tasks & Acceptance` entries for the files named below. The unified diff of the change under review is at {diff_file}. Read every file you are about to change from disk before you change it — the diff is history, disk is truth.
+
+     Run only the tests that cover the files you edit — nothing wider. Full verification runs on my side after you return. Before you reply, append to {spec_file}'s `## Spec Change Log` every decision a later reader could not re-derive from the code, and every approach you ruled out.
+
+     Reply with what you changed, the tests you ran and their results, and anything you could not close.
 
      - <file> — <what is wrong> — <what the smallest fix must do>
      ```
 
   {% if workflow.route == "full" %}
-     If the subagent cannot be continued, apply the patches yourself.
+     If the host cannot launch a subagent, apply the patches yourself.
   {% else %}
-     On oneshot, or if the full-route subagent cannot be continued, apply the patches yourself.
+     On oneshot, or if the host cannot launch a subagent, apply the patches yourself.
   {% endif %}
 {% endif %}
      Then re-run the commands in `{spec_file}`'s `## Verification` section (or perform its manual checks); if verification fails and the failure cannot be fixed, HALT with status `blocked` and blocking condition `patch verification failed`. Rewrite `{diff_file}` so it reflects the patched tree. Append the triage-log entry for this pass, recording in each patched row the fix applied.
