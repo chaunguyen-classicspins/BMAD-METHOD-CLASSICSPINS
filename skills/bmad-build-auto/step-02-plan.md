@@ -7,7 +7,15 @@
 ## INSTRUCTIONS
 
 1. Draft resume check. If `{spec_file}` exists with `status: draft`, read it and capture the verbatim `<intent-contract>...</intent-contract>` block as `preserved_intent_contract`. Otherwise `preserved_intent_contract` is empty.
-2. Investigate codebase. _Read the code yourself for narrow, localized tasks. Isolate deep exploration in synchronous subagents: instruct them to give you distilled summaries only, and plan from those summaries._ Decide which findings actually matter for execution — the specific files, symbols/lines, reuse points, and read-only constraints — and carry those forward for the Code Map. This is where the investigation lands: the spec preserves it so it is never re-narrated to the implementer at dispatch time.
+2. Investigate codebase.
+
+   **Write the question list first.** Before reading anything, list the questions the spec must answer. Any question you can settle yourself in two commands or fewer, settle it yourself — do not spend a subagent on it.
+
+   **Read in batches, not in a trickle.** For what you read yourself, write the read plan — file path plus the exact range or pattern for each entry — then execute it in as few messages as the plan allows: every entry whose input does not depend on another entry's output goes in the SAME message. Take a new turn only when the next command's input is a value you do not have yet (a compile result, a test result, a path you must first discover). Locating and reading are one command, not two — prefer a single range-matching command over a search followed by a separate slice of the same file.
+
+   **Isolate deep exploration in synchronous subagents** — launched all in ONE message, at most five, each running on the Sonnet model (pass the host's per-subagent model override; in Claude Code that is the Agent tool's `model: "sonnet"` parameter). Prefer the host's read-only exploration agent type for mapping and inventory work; use a general agent only when the question needs reasoning rather than reading. Every brief states, verbatim: the exact numbered questions, nothing open-ended; the output shape — `path:line` plus exact signatures and a one-line finding each, no code dumps and no file contents; and the budget — "Use at most 20 tool calls. When you reach it, report what you have and name what is still open. Do not keep going." Never launch a second wave for a question a first wave already covered, and never launch a subagent for something you have already found while waiting. Plan from the returned summaries.
+
+   Decide which findings actually matter for execution — the specific files, symbols/lines, reuse points, and read-only constraints — and carry those forward for the Code Map. This is where the investigation lands: the spec preserves it so it is never re-narrated to the implementer at dispatch time.
 {% if workflow.route == "oneshot" or workflow.route == "full" %}
 3. The route is `{{ workflow.route }}`; `route_source` is `pinned`.
 {% else %}

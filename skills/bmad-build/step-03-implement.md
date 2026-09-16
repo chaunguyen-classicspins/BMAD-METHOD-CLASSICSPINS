@@ -38,9 +38,9 @@ The handoff directs the subagent to load the spec's `context:` files itself, so 
 
 ### Stage the Diff
 
-Stage the diff and read it first: using the repository's version-control tooling, write a unified diff of all changes since `{baseline_commit}` (from `{spec_file}` frontmatter) — untracked files included — to a uniquely-named file in the system temp directory, set `{diff_file}` to its absolute path, and read that file into your own context. Judge against the diff, not just the implementation subagent's report.
+Stage the diff and read it first: using the repository's version-control tooling, write a unified diff of all changes since `{baseline_commit}` (from `{spec_file}` frontmatter) — untracked files included — to a uniquely-named file in the system temp directory, and set `{diff_file}` to its absolute path. Read it in two passes. **First the map:** the per-file change statistics and every hunk header, obtained in one command — that is what tells you where the change actually is. **Then the substance:** read in full only the hunks the map shows are load-bearing — production entry paths, composition and boot wiring, and anything the spec's `## Code Map` named — and group those reads so that every slice whose input does not depend on another slice's output is requested in the SAME message. Every review lens reads this diff whole in step 04, so your job here is to judge the change, not to transcribe it into your context. Judge against the diff, not just the implementation subagent's report.
 
-If the implementer reported anything unfinished, finish it before proceeding — and when that changes code, rewrite `{diff_file}` and re-read it. Acceptance criteria are judged at review, not here.
+If the implementer reported anything unfinished, finish it before proceeding — and when that changes code, rewrite `{diff_file}` and re-read it by the same two-pass rule. **Let the shell reduce, and read the verdict rather than the material:** for any verification you re-run here, every check that can end in a pass/fail, a count, or a hash comparison must be written that way and must print only that result — never pull a file, a log or a listing into your context so you can judge it by eye. Acceptance criteria are judged at review, not here.
 
 ### Visual Contract Audit
 

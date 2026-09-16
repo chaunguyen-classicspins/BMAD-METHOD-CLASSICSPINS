@@ -8,7 +8,15 @@
 ## INSTRUCTIONS
 
 1. Draft resume check. If `{spec_file}` exists with `status: draft`, read it and capture the verbatim `<frozen-after-approval>...</frozen-after-approval>` block as `preserved_intent`. Otherwise `preserved_intent` is empty.
-2. Investigate the codebase. When you can, send deep searches to subagents and wait for them in this turn. Tell them to return short summaries only, so this session does not fill up with their notes. Keep only what the work needs: the specific files, symbols or lines, what to reuse, and what not to change. Write that into the Code Map. Do not retell the investigation when implementation starts — the spec already has it.
+2. Investigate the codebase.
+
+   **Write the question list first.** Before reading anything, list the questions the spec must answer. Any question you can settle yourself in two commands or fewer, settle it yourself — do not spend a subagent on it.
+
+   **Read in batches, not in a trickle.** For what you read yourself, write the read plan — file path plus the exact range or pattern for each entry — then execute it in as few messages as the plan allows: every entry whose input does not depend on another entry's output goes in the SAME message. Take a new turn only when the next command's input is a value you do not have yet (a compile result, a test result, a path you must first discover). Locating and reading are one command, not two — prefer a single range-matching command over a search followed by a separate slice of the same file.
+
+   **Isolate deep exploration in synchronous subagents** — launched all in ONE message, at most five, each running on the Sonnet model (pass the host's per-subagent model override; in Claude Code that is the Agent tool's `model: "sonnet"` parameter). Prefer the host's read-only exploration agent type for mapping and inventory work; use a general agent only when the question needs reasoning rather than reading. Every brief states, verbatim: the exact numbered questions, nothing open-ended; the output shape — `path:line` plus exact signatures and a one-line finding each, no code dumps and no file contents; and the budget — "Use at most 20 tool calls. When you reach it, report what you have and name what is still open. Do not keep going." Never launch a second wave for a question a first wave already covered, and never launch a subagent for something you have already found while waiting. Plan from the returned summaries.
+
+   Keep only what the work needs: the specific files, symbols or lines, what to reuse, and what not to change. Write that into the Code Map. Do not retell the investigation when implementation starts — the spec already has it.
 
    Do not ask the human during investigation. When something is unclear, look in the repository, planning artifacts, or history first. Keep looking until you know, or until those sources have nothing more to say. Leave any remaining choice for the next step.
 {% if workflow.route == "oneshot" %}
