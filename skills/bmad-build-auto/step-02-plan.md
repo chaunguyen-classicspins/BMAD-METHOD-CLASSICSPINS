@@ -16,6 +16,9 @@
    - **Oneshot:** set `route: 'oneshot'`.
    - **Full:** set `route: 'full'`. Drain the investigation into `## Code Map` — annotated paths, symbol/line anchors, reuse pointers, and read-only evidence — so the handoff need only point at the spec.
 
+
+   **If this story renders a surface a person looks at,** fill `## Visual Contract`: name the surface, name the fixture that will be on screen and what it puts there, name what later work owns so its absence is not read as a defect, and write each claim as something settleable by **looking at one capture** — never a coordinate, a hex value, a scale factor or a z-order, which an image cannot settle and which belong in `## Tasks & Acceptance` as field assertions. Transcribe the claims from the design sources the intent names; do not invent them, and do not resolve a missing or self-contradictory source here — that is an intent gap. If the story renders nothing, delete the section outright and say so in your output rather than leaving it empty.
+
    If `{preserved_intent_contract}` is non-empty, substitute it for the `<intent-contract>` block before writing `{spec_file}`. Self-check against the route's READY FOR DEVELOPMENT standard.
 5. If intent gaps exist, do not fantasize and do not leave open questions. Multiple defensible readings of the intent that lead to observably different outcomes, with nothing in the intent to select between them, are an intent gap — do not resolve one by picking a reading. HALT with status `blocked`, blocking condition `intent gap`, and include the unanswered questions and evidence gathered.
 6. Warning check. If step-01 carried `multiple-goals`, add it to `{spec_file}` frontmatter `warnings`. If `{spec_file}` exceeds 1600 tokens, add `oversized` to frontmatter `warnings`. Continue either way.
