@@ -11,16 +11,24 @@
 2. Investigate the codebase. When you can, send deep searches to subagents and wait for them in this turn. Tell them to return short summaries only, so this session does not fill up with their notes. Keep only what the work needs: the specific files, symbols or lines, what to reuse, and what not to change. Write that into the Code Map. Do not retell the investigation when implementation starts — the spec already has it.
 
    Do not ask the human during investigation. When something is unclear, look in the repository, planning artifacts, or history first. Keep looking until you know, or until those sources have nothing more to say. Leave any remaining choice for the next step.
+{% if workflow.route == "oneshot" %}
+3. Read `{{ rendered("spec-template.md") }}` fully and write `{spec_file}`.
+   Set `route: 'oneshot'`, `route_source: 'pinned'`, and `status: 'in-progress'`, resolving `date` to the current system date.
+   If `preserved_intent` is non-empty, use it as the frozen block.
+   **EARLY EXIT** → `{{ rendered("step-oneshot.md") }}`.
+{% elif workflow.route == "full" %}
+3. Set `route: 'full'` and `route_source: 'pinned'`, then continue.
+{% else %}
 3. {{ workflow.route_selection }}
 
-   Intent gaps and irreversible steps (migrations, data mutation, external side effects) always take the full path below.
-
-   For oneshot with intent resolved: read `{{ rendered("spec-template.md") }}` fully and write `{spec_file}`.
-   Set `route: 'oneshot'` and `status: 'in-progress'`, resolving `date` to the current system date.
+   For oneshot: read `{{ rendered("spec-template.md") }}` fully and write `{spec_file}`.
+   Set `route: 'oneshot'`, `route_source: 'auto'`, and `status: 'in-progress'`, resolving `date` to the current system date.
    If `preserved_intent` is non-empty, use it as the frozen block.
    **EARLY EXIT** → `{{ rendered("step-oneshot.md") }}`.
 
-   For full, set `route: 'full'` and continue.
+   For full, set `route: 'full'` and `route_source: 'auto'`, then continue.
+{% endif %}
+{% if workflow.route != "oneshot" %}
 4. Read `{{ rendered("spec-template.md") }}` fully. Fill it out from the intent and investigation, resolving the template's `date` field to the current system date. Put the investigation into `## Code Map`: paths, symbols or lines, what to reuse, and what not to change. Implementation should work from the spec without being told the investigation again. If there are intent gaps, add a `## Open Questions` section with one entry per gap: the choice, the options, and what each option means. Never write an intent gap into the frozen block as an assumption. If `preserved_intent` is non-empty, replace the `<frozen-after-approval>` block with it before writing. Write the result to `{spec_file}`.
 
    **If this story renders a surface a person looks at,** fill `## Visual Contract`: name the surface, name the fixture that will be on screen and what it puts there, name what later work owns so its absence is not read as a defect, and write each claim as something settleable by **looking at one capture** — never a coordinate, a hex value, a scale factor or a z-order, which an image cannot settle and which belong in `## Tasks & Acceptance` as field assertions. Transcribe the claims from the design sources the intent names; do not invent them. If the story renders nothing, delete the section outright and say so rather than leaving it empty.
@@ -63,3 +71,4 @@ Before acting on approval, re-read `{spec_file}` from disk. If it is missing, HA
 ## NEXT
 
 Read fully and follow `{{ rendered("step-03-implement.md") }}`
+{% endif %}

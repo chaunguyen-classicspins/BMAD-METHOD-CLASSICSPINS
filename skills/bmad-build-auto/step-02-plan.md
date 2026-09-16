@@ -8,13 +8,18 @@
 
 1. Draft resume check. If `{spec_file}` exists with `status: draft`, read it and capture the verbatim `<intent-contract>...</intent-contract>` block as `preserved_intent_contract`. Otherwise `preserved_intent_contract` is empty.
 2. Investigate codebase. _Read the code yourself for narrow, localized tasks. Isolate deep exploration in synchronous subagents: instruct them to give you distilled summaries only, and plan from those summaries._ Decide which findings actually matter for execution — the specific files, symbols/lines, reuse points, and read-only constraints — and carry those forward for the Code Map. This is where the investigation lands: the spec preserves it so it is never re-narrated to the implementer at dispatch time.
+{% if workflow.route == "oneshot" or workflow.route == "full" %}
+3. The route is `{{ workflow.route }}`; `route_source` is `pinned`.
+{% else %}
 3. {{ workflow.route_selection }}
 
-   Irreversible steps (migrations, data mutation, external side effects) always take the full route.
-
+   `route_source` is `auto`.
+{% endif %}
 4. Read `{{ rendered("spec-template.md") }}` fully, preserving all frontmatter fields and resolving `date` to the current system date.
    - **Oneshot:** set `route: 'oneshot'`.
-   - **Full:** set `route: 'full'`. Drain the investigation into `## Code Map` — annotated paths, symbol/line anchors, reuse pointers, and read-only evidence — so the handoff need only point at the spec.
+   - **Full:** set `route: 'full'`. Put what you learned into `## Code Map`: paths, symbols or lines, what to reuse, and what not to change. The subagent should be able to work from the spec without being told any of it again.
+
+   Set `route_source` from step 3.
 
 
    **If this story renders a surface a person looks at,** fill `## Visual Contract`: name the surface, name the fixture that will be on screen and what it puts there, name what later work owns so its absence is not read as a defect, and write each claim as something settleable by **looking at one capture** — never a coordinate, a hex value, a scale factor or a z-order, which an image cannot settle and which belong in `## Tasks & Acceptance` as field assertions. Transcribe the claims from the design sources the intent names; do not invent them, and do not resolve a missing or self-contradictory source here — that is an intent gap. If the story renders nothing, delete the section outright and say so in your output rather than leaving it empty.
