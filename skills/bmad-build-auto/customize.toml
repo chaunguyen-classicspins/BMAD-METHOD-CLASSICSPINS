@@ -54,11 +54,177 @@ on_complete = ""
 # substituted at run time.
 
 implementation_handoff = """
-Launch a subagent with no prior conversation context, with this prompt:
+Implement in **stages, each stage its own subagent**. One context carried across a whole spec grows
+until every turn re-reads it: the measured single-agent run reached 285 turns and a 742k peak context
+and cost $30.74, against $8.11 for the same story split in two — 320k and 309k peaks, and neither stage
+rewrote a file the other had written. Every stage runs with **no prior conversation context**, on the
+Sonnet model — pass the host's per-subagent model override (in Claude Code, the Agent tool's
+`model: "sonnet"` parameter). If the host offers no such override, launch on the default model and note
+the fallback in your step-03 output rather than halting. Launch a stage, wait for it synchronously, then
+launch the next with the previous stage's report in hand. **Never re-engage a stage that has already
+reported** — the fresh context is the point, not a fallback.
+
+**A `kind: finish` story cuts by surface, not by any axis below.** Its work is all editor-side, so the
+engine boundary yields nothing, and its Execution bullets are per-surface rather than per-file. One stage
+per surface, or one stage per batch of surfaces that share an approved mockup sheet — whichever the spec's
+own grouping implies. The owned-globs contract still holds, and for a finish story the globs are usually
+the design-token file plus that surface's views and art. Skip the counting and the axis rules; use the
+finish sentence in the table below.
+
+**First decide whether to split at all.** Count two things in `{spec_file}`: the `- ` bullets under
+`## Tasks & Acceptance`'s **Execution** list, and the `- ` entries in `## Code Map`. **Twenty-five
+execution bullets or fewer, and twenty Code Map entries or fewer: one stage** — launch it with the whole
+spec, skip the rest of this section, and use the single-stage sentence below. Over either number, split
+along the axis rules below. (The thresholds are calibrated on this repo's shipped specs: 17/12 for the
+cheapest story, 30/24 and 60/39 for the two that overran.)
+
+**Choose the cut axis — take the first axis that yields a real boundary, then apply it.** The number of
+stages equals the number of cuts plus one; there is no hard cap on stage count. What is capped is the
+file-ownership contract further down: every cut must produce owned file globs that do not overlap. Small
+stories rarely need more than two stages; a 60-bullet spec in this epic set naturally cuts into three.
+
+1. **File-disjoint groups.** Group the Execution bullets by the file(s) each one touches (the leading
+   `` `FILE` `` token in the bullet names it). If the bullets can be partitioned into ≥2 groups whose
+   file globs do not overlap, cut on those group boundaries. This is the strongest axis because a
+   disjoint cut cannot produce cross-stage rewrites by construction. When the spec already carries
+   semantic sub-groupings (`**Execution — Phase X**` sub-headings, numbered sections, or comparable
+   markers), prefer those group boundaries when their files are disjoint — the planner has already read
+   this axis for you.
+
+2. **Environment / tool inventory.** Cut where the tools a bullet needs materially change: headless C#
+   (.NET SDK, `dotnet test`) → Unity C# (UnityEngine references, no Editor session) → Unity Editor
+   (MCP tools, `tests-run EditMode`, prefabs, scenes, importers) → external tools (`visual-judge.sh`
+   and other CLIs). Every transition is a candidate cut because the two sides pay different tool costs,
+   verify with different tool sets, and can in principle run on different processes. Use this axis when
+   axis 1 gives a weak or single cut but the spec spans multiple envs.
+
+3. **Layer / dependency.** Cut at Domain / Application / Presentation boundaries when the spec is one
+   env end-to-end and file groups overlap (e.g. shared aggregate types). Layer cuts usually reduce to
+   axis 1 once each layer's files are enumerated.
+
+4. **Bullet count — fallback only.** If none of the above surfaces a boundary, cut at the group heading
+   nearest the middle of the Execution list, otherwise at the bullet nearest the middle. Never make a
+   cut that interleaves the two halves — the list is dependency-ordered, so a prefix/suffix cut is
+   always safe.
+
+Name the axis and the boundary in your step-03 output. For every cut, list each stage's **owned file
+globs** (the union of the file paths named by that stage's bullets, generalised to globs when a whole
+directory is in play).
+
+**File ownership is the contract.** A later stage does not rewrite an earlier stage's owned files — it
+builds on them. If a stage cannot close a task without work belonging to another stage's files, it
+leaves the task, names it in its report, and moves on; it never reaches across the boundary to finish
+it. A stage that writes outside its owned globs is a bug in the split — re-do the axis choice, not the
+edit.
+
+**Recovery is capped at one.** If a stage reports unclosed bullets from inside its own owned files,
+dispatch **one** recovery stage with a fresh Sonnet context, its scope narrowed to exactly those
+unclosed bullets. If the recovery stage itself reports unclosed bullets, HALT with `intent_gap` in the
+run's ATTENTION file and hand back to the operator — do not spiral into a third attempt. Fixes for
+defects surfaced by step-04 review go through the patch branch, not through a new implementation stage.
+
+Give each stage this prompt, with `<STAGE>` replaced by its sentence from the table below, `<FILES>`
+replaced by its owned file globs (one per line), and — for every stage after the first — the previous
+stage's report appended verbatim underneath that sentence:
 
 > Read {spec_file} fully and implement it — the spec is the sole source of truth. Load every file listed in its frontmatter `context:` before you start.
 >
-> When done, report what you changed, how you verified it, and anything left incomplete or risky.
+> **<STAGE>**
+>
+> **Your owned file globs.** Every write you make must land inside this set:
+>
+> <FILES>
+>
+> If a task would need a write outside this set, leave it, name it in your report with the file it needed, and move on. Never edit a file another stage owns.
+>
+> **Stop before you sprawl.** If you are still working after roughly 120 tool calls, stop where the code is consistent, write your findings down as instructed below, and report what is done and what remains. A fresh agent continues from the spec and your report — that is cheaper than one more turn on a context this size, and it is not a failure.
+>
+> **Round-trip discipline.** Every turn re-sends your whole context to the model, so one extra turn costs far more than one extra tool call inside a turn. Batch by dependency, not by habit:
+>
+> - **Batch what is independent through `Tools/pf/pf-probe`.** Reads, greps and inspections of different files go in ONE call, each result capped so one fat file cannot flood a context you re-send for the rest of the stage:
+>
+>   ```
+>   Tools/pf/pf-probe --cap 2k <<'EOF'
+>   sig     : rg -n "class RowBadgeView" Assets/<sku>
+>   slice   : read Assets/<sku>/Design/Tokens.cs:1-40
+>   callers : rg -n "ItemViewFactory" Assets/<sku> -l
+>   EOF
+>   ```
+>
+>   It runs the items in parallel, marks each `EMPTY` / `TRUNCATED n->m` / `exit N`, and a failing item never aborts the others. `read FILE:L1-L2` replaces a `Read` call. Raise `--cap` for one item and rerun it alone when the cut mattered — that is one cheap turn against a blob you would otherwise carry to the end of the stage. Several edits to the same file still go in one message the ordinary way.
+> - **Never batch across a dependency.** Do not guess the output of a compile, a test run, an editor refresh, or a file you have not read yet. When the next call's input depends on this call's result, take the extra turn — that is what turns are for.
+> - **One red test run, one fix pass.** When a run comes back red, fix every error visible in that output before re-running. Fixing one error per cycle is the most expensive habit available to you.
+> - **Read a file once.** Do not re-read a file you wrote or edited yourself unless something outside this session changed it. Your own edit already told you the new content.
+> - **Type-check in the shell before you refresh Unity.** A compile error found by `dotnet build` is one Bash turn (~1 s cold, ~0.5 s incremental), no Editor state, ~200 tokens of output. Finding the same error through `assets-refresh` + `console-get-logs` is a domain reload + MCP round-trip + a log payload you carry for the rest of the stage. Run after any `.cs` edit before you touch `pf-mcp`:
+>
+>   ```
+>   Tools/pf/typecheck-headless.sh                     # Domain / Application / Gen — pure C#, no Unity refs
+>   Tools/pf/typecheck.sh Game.Views                   # any one assembly, with Unity refs
+>   Tools/pf/typecheck.sh --changed                    # only asmdefs touched since HEAD
+>   ```
+>
+>   Prints `OK  <asm>  (Ns)` on success; on failure prints deduped `error CS####` lines and exits non-zero. Cache in `Library/pf-typecheck/`. Escalate to `assets-refresh` **only** when typecheck is green but you need domain reload for a source-generator, ILPP, or AssetDatabase change. Cross-asmdef refs are resolved from `Library/ScriptAssemblies/<Asm>.dll`, so a stale prebuilt DLL there can hide a fresh signature break — refresh Unity once at the end of the stage to confirm.
+> - **Drive Unity through `Tools/pf/pf-mcp`.** Every MCP result is pasted into your context verbatim and re-sent on every later turn, so a fat one is paid for the rest of the session — on this project `console-get-logs` has returned ~4 MB from a single unfiltered call. A verify sequence is also a *script*, not a series of decisions, so it costs one turn, not seven:
+>
+>   ```
+>   Tools/pf/pf-mcp <<'EOF'
+>   assets-refresh               {}
+>   console-get-logs             {"count":20,"logType":"Error"}
+>   tests-run                    {"testMode":"EditMode","testAssembly":"Game.Tests.Editor"}
+>   editor-application-set-state {"state":"play"}
+>   screenshot-game-view         {}
+>   editor-application-set-state {"state":"stop"}
+>   EOF
+>   ```
+>
+>   Items run **in order** — the Editor is single-threaded — each payload reduced in the shell (`logs-brief`, `test-summary`, `screenshot-path`, `raw`; the default is chosen from the tool name). `--stop-on-fail` is the default, so a red compile never pays for the test run, the play-mode entry and the capture behind it. **`screenshot-path` returns a path, not pixels**: an image costs ~2.9k tokens of permanent context, so look at it with `Read` only once you actually need to judge it. This is the one place batching across a dependency is correct — the script sequences and inspects, you never guess a result. Keep the direct `mcp__…` tools for one-off calls whose result is already small (`editor-application-get-state`, `scene-list-opened`, a targeted `assets-find`). Detail: the `pf-gates` skill.
+> - **Resolve tool schemas in one pass.** If the host defers tool schemas behind a search tool, search once for every tool this story will plausibly need, not once per tool.
+> - **Do not read build output** — `Library/`, `Temp/`, `Logs/`, `obj/` are generated. (`.meta` files are source: read one when you need to resolve a GUID, not otherwise.)
+>
+> **Settle whichever section {spec_file} carries before you report.** Which one it is follows the story's `kind`, and you never substitute one for the other.
+>
+> **`kind: function` → `## Render Floor`. No vision model, no judge, no quota.** Capture the surface, then settle it with `python3 Tools/pf/pixel-probe.py --capture <png> --points Tools/UiGate/probes/<surface>.json`. It checks the capture is real before it checks anything in it: a frame of near-zero variance means the capture pipeline is broken, not that the work is wrong, and it exits `2` saying so rather than reporting defects that are not there. Then each point is settled against the colour `DesignTokens.cs` already fixes, to a CIE76 dE tolerance — exit `0` all clear, `1` drift.
+>
+> The points file is **generated, never typed**: `python3 Tools/pf/pixel-probe.py --generate Tools/UiGate/probes/<surface>.layout.json --out Tools/UiGate/probes/<surface>.json` resolves each point from an anchored rect and a token symbol, so a token change moves the probe with it. Add points by editing the layout and regenerating. The tool is framework-owned and arrives under `Tools/pf/` through the agent-doc sync; the `probes/` data beside it is this SKU's. Detail: the `pf-uigate` skill. A claim you can settle neither by probe nor by field assertion was mis-sorted at planning: it is aesthetic, it belongs to the finish epic, and the fix is to name it in your report — never to weaken it until it passes.
+>
+> **`kind: finish` → `## Visual Contract`. Judge, then diagnose, then edit — in that order.** Capture the surface, then run `Tools/pf/visual-judge.sh --capture <png> --reference <the approved mockup the contract names> --spec {spec_file}`. Before you change anything in response to a `VIOLATED` row, put three images in front of you — the approved mockup, this capture, and the previous round's — and write into `## Implementation Notes`: the symptom you can see, the cause in the tokens or code that produces it, and the change you will make. Those images cost ~2.9k of context each and they earn it here; this is the one place in the run where looking is the work. Adjusting a value because a row came back red, without naming the cause, is exactly what turns one defect into four identical rounds.
+>
+> The judge is never asked what to change — it settles rows, you diagnose. Three bounds, all of them hard:
+>
+> - **At most three judge rounds.** If a row is still `VIOLATED` after the third, stop and report it as open. A fourth round costs more than it finds.
+> - **Only judge a capture that changed.** An identical capture cannot produce a different verdict — re-capture first, or do not call the judge.
+> - **Same row, twice, with no pixel change between the captures → stop there.** The render did not move, so the row is not describing something this surface can reach. Report it as `intent_gap` naming the row, and leave the remaining rounds unspent.
+>
+> **One round, one fix pass** applies to both: fix every claim the round returned before re-capturing, exactly as with a red test run.
+>
+> A `CANNOT-TELL` row is not a failure and not yours to force: it means an image cannot settle that claim. Name it in your report so the verification pass can turn it into a field assertion.
+>
+> **Write findings down before you finish.** Before your final report, append to {spec_file}'s `## Spec Change Log` every decision a later reader could not re-derive from the code, and every approach you ruled out with the evidence that ruled it out. Your context does not survive; the spec does.
+>
+> When done, report what you changed, how you verified it, and anything left incomplete or risky. Name every task from `## Tasks & Acceptance` you did not close, and for each unclosed task name the reason — outside your owned files, needs an env you were not given, or a genuine defect — so the next stage or the operator can act on it without re-deriving it.
+
+The `<STAGE>` sentences, by the axis that chose the cut:
+
+**No split (twenty-five bullets or fewer and twenty Code Map entries or fewer):** *Implement every task in `## Tasks & Acceptance`.*
+
+**Axis 1 — file-disjoint groups** (name the group in place of `<GROUP>` — a `**Execution — Phase X**` sub-heading, a numbered section, or the shared directory that defines the group; use the planner's marker verbatim when it exists)
+- Each stage: *Do the Execution bullets under `<GROUP>` and nothing outside it. Leave every other group to its own stage, and name any bullet you could not close.* — the second and later stages append: *Every prior group is already implemented and verified: read its output, do not rewrite it.*
+
+**Axis 2 — environment / tool inventory** (name the env in place of `<ENV>` — one of: `headless-C#`, `unity-C#`, `unity-editor`, `external-tool`)
+- Each stage: *Do only the Execution bullets whose tools land in `<ENV>`. Leave every bullet that needs a different env to its own stage, and name it in your report.* — the second and later stages append: *Every prior env is already implemented and verified: read its output, do not rewrite it.*
+
+**Axis 3 — layer / dependency** (name the layer in place of `<LAYER>` — Domain, Application, Presentation, or the project's own layer names)
+- Each stage: *Do the Execution bullets that belong to `<LAYER>` and nothing outside it.* — the second and later stages append: *Every prior layer is already implemented and verified: read it, do not rewrite it.*
+
+**Axis 4 — bullet count** (fallback; name the cut point in place of `<CUT>`: the group heading you cut at, or the bullet's own file path)
+- Stage A: *Do the Execution bullets of `## Tasks & Acceptance` from the first one up to and including `<CUT>`, and nothing after it. Leave the rest to the next stage, and name anything you could not close.*
+- Stage B: *Do the Execution bullets of `## Tasks & Acceptance` after `<CUT>` through the end of the list, plus the open items named in the report below. Everything before the cut is already implemented and verified: read it, do not rewrite it.*
+
+**Finish story — cut by surface** (name the surface or the batch in place of `<SURFACE>`)
+- Each stage: *Bring `<SURFACE>` up to its `## Visual Contract` against the approved mockup that contract names, and touch no other surface. Diagnose before you edit, and stop at the bounds the contract sets.* — the second and later stages append: *Every prior surface is already settled and its reference capture accepted: do not re-open it.*
+
+**Recovery stage** (dispatched at most once per parent stage, per the Recovery cap above; append the parent stage's owned globs verbatim and the exact bullets it reported unclosed)
+- *Close only the bullets listed below, staying inside the file globs shown; report any bullet you still cannot close, and do not attempt further recovery.*
 """
 
 # Review selection: "none" launches no lens and skips triage, "quick" runs

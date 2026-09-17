@@ -160,5 +160,26 @@ if [ "$DO_DOCTOR" = "1" ] && [ "$DRY" = "0" ]; then
     --doctor
 fi
 
+# ------------------------------------------------------- planning law ----
+# apply-story-sizing.sh writes _bmad/custom/bmad-create-epics-and-stories.toml,
+# which has no project-specific content at all — it is generated, not authored.
+# So run it here rather than leaving a step for a human to forget. It refuses to
+# overwrite a file that differs from what it would write, which is exactly the
+# behaviour we want: a SKU that has edited its own copy keeps it, and says so.
+if [ "$DO_TOOLS" = "1" ] && [ "$DRY" = "0" ]; then
+  LAW="$TOOLS_DIR/apply-story-sizing.sh"
+  if [ -x "$LAW" ]; then
+    echo ""
+    echo "==> Installing the planning law"
+    if "$LAW" "$ROOT" >/dev/null 2>&1; then
+      echo "    _bmad/custom/bmad-create-epics-and-stories.toml is current"
+    else
+      echo "    SKIPPED — this SKU's copy differs from the fork's. Yours is kept."
+      echo "    Compare, then re-run with --force if the fork's should win:"
+      echo "      \"$LAW\" --print | diff - \"$ROOT/_bmad/custom/bmad-create-epics-and-stories.toml\""
+    fi
+  fi
+fi
+
 echo ""
 echo "==> Sync complete"
