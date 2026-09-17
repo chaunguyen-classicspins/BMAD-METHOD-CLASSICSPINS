@@ -97,7 +97,18 @@ Review the complete epic and story breakdown to ensure EVERY FR is covered:
   - ❌ WRONG: Multiple epics each modify the same core files with no feedback loop between them
   - ✅ RIGHT: Epics target distinct files/components, OR consolidation was explicitly considered and rejected with rationale
 
-### 5. Dependency Validation (CRITICAL)
+### 5. Story Kind Validation (CRITICAL)
+
+**Check that:**
+
+- Every story declares `**Kind:** function` or `**Kind:** finish`
+- No `function` story carries an aesthetic claim. Re-run the floor/ceiling test on each of its ACs: a claim that cannot be settled by looking at one capture of that story's fixture, without knowing what the finished screen is supposed to look like, does not belong there — move it to the finish epic rather than reword it
+- No `function` story carries a Visual Contract, and none produces a reference capture
+- If the product ships any surface a person looks at, a finish epic exists, sits after the last epic that introduces a new surface, covers every such surface, and batches them 4-6 at a time with an approval gate between batches
+- ❌ WRONG: a `function` story asserting "the shadow reads as the goods sitting on the shelf"
+- ✅ RIGHT: that story asserting "the shadow renders at the declared offset", with the reading claim owned by the finish epic
+
+### 6. Dependency Validation (CRITICAL)
 
 **Epic Independence Check:**
 
@@ -117,7 +128,7 @@ For each epic, review stories in order:
 - ❌ WRONG: Story references features not yet implemented
 - ✅ RIGHT: Each story builds only on previous stories
 
-### 6. Complete and Save
+### 7. Complete and Save
 
 If all validations pass:
 

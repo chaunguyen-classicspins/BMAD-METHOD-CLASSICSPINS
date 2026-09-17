@@ -1,6 +1,7 @@
 ---
 title: '{title}'
 type: 'feature' # feature | bugfix | refactor | chore
+kind: 'function' # function | finish — function builds behaviour and structure; finish makes an already-built surface look right
 created: '{date}'
 status: 'draft' # draft | ready-for-dev | in-progress | in-review | done | blocked
 route: '' # oneshot | full — set by step-02
@@ -50,18 +51,54 @@ deferred: [] # append-only machine-readable deferred review findings; each item 
 | HAPPY_PATH | INPUT | OUTCOME | No error expected |
 | ERROR_CASE | INPUT | OUTCOME | ERROR_HANDLING |
 
-## Visual Contract
+## Render Floor
 
-<!-- ONLY for a story that renders something a person looks at. If this story draws nothing,
-     DELETE THIS ENTIRE SECTION. Do not write "N/A" or "None".
-     Every row is a claim a person (or a vision model) can settle by LOOKING at one capture of
-     the surface — never a coordinate, a hex value, a scale factor or a z-order. Those belong in
-     Tasks & Acceptance as field assertions, because an image cannot settle them.
-     Transcribe from the design sources the intent names; do not invent. A missing or
-     self-contradictory design source is an intent gap, not something to decide here. -->
+<!-- `kind: function` ONLY, and only when the story draws something. If it draws nothing,
+     DELETE THIS ENTIRE SECTION. Do not write "N/A" or "None". A `kind: finish` story has a
+     Visual Contract instead and no Render Floor.
+
+     THE DIVIDING TEST, applied to every claim you are about to write:
+       Can this claim be settled by looking at ONE capture of THIS story's fixture alone,
+       WITHOUT knowing what the finished screen is supposed to look like?
+       Yes -> it belongs here.
+       No  -> it is an aesthetic claim. It belongs to the finish epic. Do not write it here,
+              and do not water it down until it fits — that is how an unsatisfiable row is born.
+
+     Floor claims are settled deterministically and WITHOUT a vision model: a variance check
+     (a capture that is one flat colour is a broken capture, not a failed claim), pixel probes at
+     points whose expected colour is known from the design tokens, and field assertions. Never a
+     coordinate, a hex value, a scale factor or a z-order in the table — those are field
+     assertions in Tasks & Acceptance. -->
 
 **Surface:** SURFACE_NAME · **Fixture on screen:** FIXTURE_AND_WHAT_IT_PUTS_THERE
 **Out of scope — absent is correct:** WHAT_LATER_WORK_OWNS
+
+| # | Floor claim | Settled by |
+|---|-------------|------------|
+| F1 | WHAT_MUST_BE_PRESENT_OR_ABSENT | pixel probe / field assertion |
+| F2 | WHAT_MUST_BE_PRESENT_OR_ABSENT | pixel probe / field assertion |
+
+## Visual Contract
+
+<!-- `kind: finish` ONLY. A `kind: function` story never carries this section — DELETE IT.
+     Do not write "N/A" or "None".
+
+     A finish story judges a real capture against a mockup a person already approved, so name
+     that mockup and its version. Every row is a claim a person (or a vision model) can settle by
+     LOOKING — the aesthetic questions the floor deliberately refused: does this read as raised,
+     as grounded, as deliberate furniture rather than a half-loaded row.
+
+     Every row must be satisfiable on the surface as it will actually be built. A row that
+     contradicts the approved mockup, or that describes a composition this surface cannot reach,
+     is an intent gap — HALT, do not reword it to fit.
+
+     Transcribe from the approved design sources; do not invent. Divergences the design package
+     already declared (a mockup that stretches where production nine-slices, say) are passed to
+     the judge as known and must never be reported as faults. -->
+
+**Surface:** SURFACE_NAME · **Approved mockup:** PATH_AND_VERSION · **Declared divergences:** PATH_OR_NONE
+**Fixture on screen:** FIXTURE_AND_WHAT_IT_PUTS_THERE
+**Round budget:** N rounds — on exhaustion, HALT rather than continue tuning blind
 
 | # | Observable claim | Source |
 |---|------------------|--------|

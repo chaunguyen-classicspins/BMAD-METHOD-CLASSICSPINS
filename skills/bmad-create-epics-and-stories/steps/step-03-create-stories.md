@@ -76,10 +76,40 @@ Stories must be independently completable in sequence:
 - ❌ WRONG: "Wait for Story 1.4 to be implemented before this works"
 - ✅ RIGHT: "This story works independently and enables future stories"
 
+**🎭 STORY KIND PRINCIPLE:**
+
+Every story declares a kind, and the kind decides how the story is proved:
+
+- **`function`** — behavior, logic, and the structure of a surface. Proved deterministically, with no model in the loop: engine-free tests, field assertions, a pixel-variance check that catches "nothing rendered at all", pixel probes at points whose colour is known in advance. Runs inside the local test suite. Carries only **floor** claims.
+- **`finish`** — making a surface look right against the approved mockup. Proved by a vision model comparing a capture against that mockup, plus a human approving the batch. Runs outside the test suite: it is a model call, and not deterministic. Carries the **ceiling** claims, under a **Visual Contract** heading (`## Visual Contract` once the story is written out as its own file).
+
+Apply this test mechanically to EACH claim before you write it into a story:
+
+> **Can this claim be settled by looking at ONE capture of this story's fixture, without knowing what the finished screen is supposed to look like?**
+> Yes → **floor** → it belongs in a `function` story.
+> No → **ceiling** → it belongs in the finish epic.
+
+**Floor claims (`function`):**
+
+- "the backdrop renders and is not a flat fill"
+- "three slots are present, and the badge sits in row 0"
+- "no element belonging to a later story leaks into this capture"
+- "every label fits inside its control, including the longest localized string"
+
+**Ceiling claims (`finish`):**
+
+- "the shadow reads as the goods sitting on the shelf"
+- "the HUD reads as loose items on the illustrated wall, with no panel behind them"
+- "the locked button and the active button are two different treatments, not one treatment at two opacities"
+
+**🚫 FORBIDDEN: an aesthetic claim inside a `function` story.** Its fixture renders a half-built screen, so the claim is either unanswerable or answerable and wrong, and the story deadlocks in review with no stage allowed to relax it. When a claim fails the test, strike it from the story and record it against the finish epic's surface instead. A `function` story never carries a Visual Contract, and never produces a reference capture — reference captures are an output of `finish` stories, and only then become the baseline for regression checks.
+
 **STORY FORMAT (from template):**
 
 ```
 ### Story {N}.{M}: {story_title}
+
+**Kind:** function | finish
 
 As a {user_type},
 I want {capability},
@@ -136,14 +166,16 @@ Work with user to break down the epic into stories:
 - Identify distinct user capabilities
 - Ensure logical flow within the epic
 - Size stories appropriately
+- For the finish epic, break by surface and group the stories into batches of 4-6, with a human approval gate between batches
 
 #### C. Generate Each Story
 
 For each story in the epic:
 
 1. **Story Title**: Clear, action-oriented
-2. **User Story**: Complete the As a/I want/So that format
-3. **Acceptance Criteria**: Write specific, testable criteria
+2. **Kind**: `function` or `finish` — every story in a functional epic is `function`; every story in the finish epic is `finish`
+3. **User Story**: Complete the As a/I want/So that format
+4. **Acceptance Criteria**: Write specific, testable criteria
 
 **AC Writing Guidelines:**
 
@@ -151,6 +183,7 @@ For each story in the epic:
 - Each AC should be independently testable
 - Include edge cases and error conditions
 - Reference specific requirements when applicable
+- Run every AC that touches a surface through the floor/ceiling test; move the ceiling claims to the finish epic rather than softening them
 
 #### D. Collaborative Review
 
@@ -203,8 +236,9 @@ The final {planning_artifacts}/epics.md must follow this structure exactly:
 5. **Epic sections** for each epic (N = 1, 2, 3...)
    - Epic title and goal
    - All stories for that epic (M = 1, 2, 3...)
-     - Story title and user story
+     - Story title, kind, and user story
      - Acceptance Criteria using Given/When/Then format
+     - Visual Contract on `finish` stories only
 
 ### 7. Present FINAL MENU OPTIONS
 

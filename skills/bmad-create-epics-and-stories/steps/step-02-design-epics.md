@@ -57,7 +57,8 @@ Load {planning_artifacts}/epics.md and review:
 4. **Logical Flow**: Natural progression from user's perspective
 5. **Dependency-Free Within Epic**: Stories within an epic must NOT depend on future stories
 6. **Implementation Efficiency**: Consider consolidating epics that all modify the same core files into fewer epics
-7. **Provable Surfaces**: If an epic ships anything a person looks at, state once — in the epic, for the stories to inherit — how each such story proves its surface. Prefer claims a person can settle by looking at one capture ("the goods read as sitting on the shelf, not floating") over coordinate- or pixel-level assertions: a named sample point only ever checks the one thing somebody thought to sample, and it has to be rediscovered every time the layout moves. Anything whose truth is a number the eye cannot read — an exact scale, an exact colour, a z-order — is a field assertion, not a visual claim.
+7. **Provable Surfaces**: If an epic ships anything a person looks at, state once — in the epic, for the stories to inherit — how each such story proves its surface. A functional epic proves only the **floor**: that the surface renders at all and is not a flat fill, that the named elements are present in the right slots, that nothing belonging to a later story has leaked in, that labels fit inside their controls in every language shipped. Floor claims settle deterministically, with no model in the loop. Anything whose truth is a number the eye cannot read — an exact scale, an exact colour, a z-order — is a field assertion, not a visual claim.
+8. **Aesthetics Belong to the Finish Epic**: A functional epic never carries aesthetic claims. Its stories render a screen that is still half-built — the board exists, the booster bar does not yet — so a claim about how the finished composition reads cannot be settled against it: the answer is either impossible or wrong, and the story deadlocks because no later stage is allowed to relax the claim. Collect every aesthetic claim in the product into a **single finish epic**, placed immediately after the last epic that introduces a new surface. That epic owns the look of every surface, works in batches of 4–6 surfaces with a human approval gate between batches, and produces the reference captures that later regression checks compare against. Functional epics produce no reference captures. Propose no finish epic when the product has no surface a person looks at, or when `{workflow.finish_epic}` is false.
 
 **⚠️ CRITICAL PRINCIPLE:**
 Organize by USER VALUE, not technical layers:
@@ -118,6 +119,8 @@ For each proposed epic (considering whether epics share the same core files):
 3. **FR Coverage**: Which FR numbers this epic addresses
 4. **Implementation Notes**: Any technical or UX considerations
 
+If any proposed epic ships a surface, also propose the finish epic named by `{workflow.finish_epic_title}`, positioned after the last epic that introduces one, listing every surface it will take to its approved look.
+
 **Step C: Review for File Overlap**
 
 Assess whether multiple proposed epics repeatedly target the same core files. If overlap is significant:
@@ -143,6 +146,11 @@ Format the epics_list as:
 **FRs covered:** FR4, FR5, FR6, etc.
 
 [Continue for all epics]
+
+### Epic [last]: [finish epic title]
+**Kind:** finish
+Every surface reaches its approved look, in batches of 4-6 with an approval gate between batches.
+**Surfaces covered:** [list every surface the earlier epics introduced]
 ```
 
 ### 4. Present Epic List for Review

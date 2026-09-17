@@ -21,9 +21,11 @@ Every headless run ends with one of these payloads. Omit keys for artifacts not 
   "memlog": "{doc_workspace}/.memlog.md",
   "working_artifacts": ["{doc_workspace}/.working/color-themes-1.html"],
   "promoted_artifacts": {
-    "mockups": ["{doc_workspace}/mockups/direction-calm-sage.html"],
+    "mockups": ["{doc_workspace}/mockups/key-gameplay-01.html", "{doc_workspace}/mockups/key-gameplay-01.png"],
     "wireframes": ["{doc_workspace}/wireframes/ia-2026-05-19.excalidraw"]
   },
+  "surfaces": "{doc_workspace}/SURFACES.md",
+  "divergences": "{doc_workspace}/DIVERGENCES.md",
   "open_questions": [],
   "assumptions": [],
   "external_handoffs": [
@@ -32,7 +34,7 @@ Every headless run ends with one of these payloads. Omit keys for artifacts not 
 }
 ```
 
-The `working_artifacts` and `promoted_artifacts` keys are optional and omitted entirely when empty. Headless Create runs default to not enabling creative tools — both keys are typically absent in headless output unless the caller enabled them.
+The `working_artifacts`, `promoted_artifacts`, `surfaces` and `divergences` keys are optional and omitted entirely when empty; `surfaces` / `divergences` appear whenever key-screen mocks were rendered. Headless Create runs default to not enabling creative tools — both keys are typically absent in headless output unless the caller enabled them.
 
 ## Update
 

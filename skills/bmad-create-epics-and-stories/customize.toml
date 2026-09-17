@@ -32,6 +32,17 @@ activation_steps_append = []
 
 persistent_facts = []
 
+# Whether Step 2 proposes the finish epic — the single epic, placed after the
+# last epic that introduces a surface, that owns the aesthetic pass across every
+# surface. Set false for a product with nothing a person looks at (a library, a
+# service, a CLI). Override wins.
+
+finish_epic = true
+
+# Title Step 2 gives that epic. Override wins.
+
+finish_epic_title = "Visual Finish"
+
 # Scalar: executed when the workflow reaches Step 4 (Final Validation) and the
 # user confirms [C] Complete — after the epics.md is saved and bmad-help is invoked.
 # Override wins. Leave empty for no custom post-completion behavior.

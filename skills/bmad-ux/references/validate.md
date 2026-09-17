@@ -26,7 +26,7 @@ Rubric walker prompt:
 >
 > 4. **State coverage** (EXPERIENCE.md). Walk every IA surface. List states it should have (empty, cold-load, focus, error, offline, permission-denied — whichever apply). Verify each covered.
 >
-> 5. **Visual reference coverage.** List every file in `mockups/`, `wireframes/`, `imports/`. Spines link to each inline at the relevant section and name what it illustrates; spines-win-on-conflict stated once. List orphans and unspecific references.
+> 5. **Visual reference coverage.** List every file in `mockups/`, `wireframes/`, `imports/`. Spines link to each inline at the relevant section and name what it illustrates; spines-win-on-conflict stated once. List orphans and unspecific references. Then the finish handoff (`references/finish-handoff.md`): every IA surface resolves in `SURFACES.md` to either an approved version with a capture PNG at the profile resolution, or `capture: none` + reason; element inventories name only components the spines define; `DIVERGENCES.md` covers every captured surface (an explicit *none* counts); DESIGN.md carries a finish bar whose lines are judgeable from a screenshot. Links cite versioned filenames, never bare surface keys.
 >
 > **Pass 2 — judgment.** Verdict per category (*strong / adequate / thin / broken*); findings only where they add information.
 >

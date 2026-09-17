@@ -30,7 +30,14 @@
    Set `route_source` from step 3.
 
 
-   **If this story renders a surface a person looks at,** fill `## Visual Contract`: name the surface, name the fixture that will be on screen and what it puts there, name what later work owns so its absence is not read as a defect, and write each claim as something settleable by **looking at one capture** — never a coordinate, a hex value, a scale factor or a z-order, which an image cannot settle and which belong in `## Tasks & Acceptance` as field assertions. Transcribe the claims from the design sources the intent names; do not invent them, and do not resolve a missing or self-contradictory source here — that is an intent gap. If the story renders nothing, delete the section outright and say so in your output rather than leaving it empty.
+   **Set `kind`** from the story's own intent: `finish` if the work is to make an already-built surface look right against an approved mockup, `function` for everything else — behaviour, logic, and the structural build of a surface. A story carrying both is two stories; split it rather than picking one.
+
+   **If this story draws something,** fill the section its `kind` calls for and delete the other outright, saying so in your output rather than leaving it empty. A story that draws nothing deletes both.
+
+   - **`kind: function` → `## Render Floor`.** Name the surface, the fixture that will be on screen and what it puts there, and what later work owns so its absence is not read as a defect. Apply the dividing test to every claim before you write it: *can this be settled by looking at one capture of this fixture alone, without knowing what the finished screen is supposed to look like?* If no, it is aesthetic — it belongs to the finish epic, and you leave it out rather than weakening it until it fits. Floor claims are settled by pixel probe or field assertion, never by a vision model.
+   - **`kind: finish` → `## Visual Contract`.** Name the approved mockup and its version, the declared divergences file if the design package produced one, the fixture, and the round budget. Transcribe the claims from the approved design sources; do not invent them.
+
+   In either case, do not resolve a missing or self-contradictory design source here — that is an intent gap. Before writing the section, check every row against the fixture you just declared: a row that cannot hold on that fixture is an intent gap, not a drafting problem, and is never repaired by rewording it.
 
    If `{preserved_intent_contract}` is non-empty, substitute it for the `<intent-contract>` block before writing `{spec_file}`. Self-check against the route's READY FOR DEVELOPMENT standard.
 5. If intent gaps exist, do not fantasize and do not leave open questions. Multiple defensible readings of the intent that lead to observably different outcomes, with nothing in the intent to select between them, are an intent gap — do not resolve one by picking a reading. HALT with status `blocked`, blocking condition `intent gap`, and include the unanswered questions and evidence gathered.

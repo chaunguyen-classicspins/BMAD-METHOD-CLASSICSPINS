@@ -73,6 +73,20 @@ creative_tools = [
   "file:assets/key-screens.md",
 ]
 
+# Capture resolutions for key-screen mock PNGs, keyed by form-factor. The mock
+# PNG and the screenshot a downstream finish story takes of the real product
+# must be the same pixel size, so the run picks the entry matching the settled
+# EXPERIENCE.md Foundation form-factor rather than hardcoding a size. Override
+# to pin an org's device rig (a Unity 1080x1920 portrait rig, a 1280px web
+# breakpoint). Each entry: `<form-factor>: <W>x<H>`.
+# See references/finish-handoff.md.
+capture_profiles = [
+  "mobile-portrait: 1080x1920",
+  "mobile-landscape: 1920x1080",
+  "tablet-portrait: 1536x2048",
+  "desktop-web: 1440x900",
+]
+
 # Polish passes applied to DESIGN.md and EXPERIENCE.md at finalize.
 # Entries: `skill:NAME`, `file:PATH`, or plain text directive.
 # Suggested order: structural → content/voice → prose mechanics.

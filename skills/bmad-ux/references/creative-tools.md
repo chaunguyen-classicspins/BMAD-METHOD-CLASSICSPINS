@@ -10,7 +10,7 @@ Decision moments where a visual beats more conversation: picking color tokens, p
 
 ## Artifact handling
 
-Every renderer writes to `{doc_workspace}/.working/` with a descriptive filename. `.working/` is the audit trail and survives the run. At Finalize, the facilitator walks `.working/` with the user and promotes artifacts with lasting reference value to `{doc_workspace}/mockups/` (HTML anchoring a brand or layout decision) or `{doc_workspace}/wireframes/` (Excalidraw a dev would glance at). Bar for promotion: *would a future reader of `DESIGN.md` or `EXPERIENCE.md` open this?* Default is leave-in-`.working/`.
+Every renderer writes to `{doc_workspace}/.working/` with a descriptive filename. `.working/` is the audit trail and survives the run. At Finalize, the facilitator walks `.working/` with the user and promotes artifacts with lasting reference value to `{doc_workspace}/mockups/` (HTML anchoring a brand or layout decision) or `{doc_workspace}/wireframes/` (Excalidraw a dev would glance at). Bar for promotion: *would a future reader of `DESIGN.md` or `EXPERIENCE.md` open this?* Default is leave-in-`.working/`. Key-screen mocks promote as a pair — HTML plus its PNG capture — numbered per surface, an approved pair never overwritten: `references/finish-handoff.md`.
 
 ## Renderer contract
 

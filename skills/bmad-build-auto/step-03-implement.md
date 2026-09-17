@@ -54,15 +54,34 @@ Stage the diff and read it: using the repository's version-control tooling, writ
 
 Run the commands in `{spec_file}`'s `## Verification` section (or perform its manual checks). **Let the shell reduce, and read the verdict rather than the material:** every check that can end in a pass/fail, a count, or a hash comparison must be written that way and must print only that result — never pull a file, a log or a listing into your context so you can judge it by eye. If verification fails and the failure cannot be fixed, HALT with status `blocked`, blocking condition `implementation verification failed`, and include the failing command or check and reason. When fixing a failure changes code, rewrite `{diff_file}` and re-read it by the same two-pass rule. Acceptance criteria are judged at review, not here.
 
+### Render Floor Audit
+
+If `{spec_file}` contains a `## Render Floor`, capture the surface it names and settle **every** claim without a vision model. Run the project's deterministic checks if it has them, otherwise perform the equivalent yourself:
+
+1. **Is the capture real?** A frame of near-zero variance is a broken capture pipeline, not a failed claim. Say so and fix the capture; never let a flat frame be judged as a defect in the work.
+2. **Settle each claim** by pixel probe at a point whose expected colour the design tokens already fix, or by a field assertion. A claim you cannot settle either way was mis-sorted at planning — it is aesthetic, and it belongs to the finish epic, not to a rewrite here.
+
+Record every claim's result. If the audit cannot be satisfied, HALT with status `blocked` and blocking condition `render floor audit failed`.
+
 ### Visual Contract Audit
 
-If `{spec_file}` contains a `## Visual Contract`, capture the surface it names and settle **every** row against that capture — by the project's visual-judge command if it has one, otherwise by reading the capture yourself. Each row ends at one of three verdicts, and none may be left unstated:
+If `{spec_file}` contains a `## Visual Contract`, settle **every** row against a real capture, by the project's visual-judge command if it has one. Each row ends at one of three verdicts, and none may be left unstated:
 
 - **satisfied** — record it.
-- **violated** — fix it, re-capture, and settle the row again. A violated row is never carried forward.
+- **violated** — enter the correction loop below. A violated row is never carried forward.
 - **cannot-tell** — the image genuinely cannot settle this claim. Name the field assertion that does settle it, add that assertion under `## Tasks & Acceptance`, and make it run. `cannot-tell` with no assertion named is an unaudited claim and counts as missing.
 
-Judge the capture, never your intent or an implementation subagent's report. If the audit cannot be satisfied, HALT with status `blocked` and blocking condition `visual contract audit failed`.
+**The correction loop. Diagnose before you edit.** Load, in the same context, the approved mockup the contract names, the current capture, and the previous round's capture. Then write down, in `## Implementation Notes`: the symptom you can see, the cause in the code or tokens that produces it, and the change you will make. Only then edit. Tuning a parameter because a row is red, without naming the cause, is what turns one defect into four identical rounds — the verdict tells you a row is wrong, and only the capture beside its mockup tells you why.
+
+Keep the judge independent of that reasoning: it settles rows against the contract and is never asked what to change. Your diagnosis is yours.
+
+**Stop conditions, whichever comes first:**
+
+- Every row settled — the audit passes.
+- The contract's round budget is spent — HALT with status `blocked` and blocking condition `visual round budget exhausted`, naming the rows still red and what each round changed.
+- **The same row comes back violated twice with no pixel change between the two captures** — the render did not move, so the row is not describing something this surface can reach. HALT with status `blocked` and blocking condition `intent gap`, naming the row. Do not spend the rest of the budget on it, and do not reword the row.
+
+Judge the capture, never your intent or an implementation subagent's report. If the audit cannot otherwise be satisfied, HALT with status `blocked` and blocking condition `visual contract audit failed`.
 
 ### Matrix Test Audit
 

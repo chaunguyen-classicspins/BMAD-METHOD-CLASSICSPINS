@@ -45,6 +45,8 @@ This document provides the complete epic and story breakdown for {{project_name}
 
 ### Story {{N}}.{{M}}: {{story_title_N_M}}
 
+**Kind:** {{story_kind_N_M}}
+
 As a {{user_type}},
 I want {{capability}},
 So that {{value_benefit}}.
@@ -57,5 +59,11 @@ So that {{value_benefit}}.
 **When** {{action}}
 **Then** {{expected_outcome}}
 **And** {{additional_criteria}}
+
+<!-- `finish` stories only: the aesthetic claims, judged against the approved mockup -->
+
+**Visual Contract:**
+
+{{visual_contract_N_M}}
 
 <!-- End story repeat -->

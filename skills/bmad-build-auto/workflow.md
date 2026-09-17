@@ -66,7 +66,8 @@ A full specification is "Ready for Development" when:
 - **Logical**: Tasks ordered by dependency.
 - **Testable**: All ACs use Given/When/Then.
 - **Surface-anchored**: ACs observe the outermost surface the intent references — never a more internal proxy for it.
-- **Observable**: A story that renders a surface a person looks at carries a `## Visual Contract` whose every row can be settled by looking at one capture; a story that renders nothing says so rather than leaving the section empty.
+- **Observable**: A story that draws something carries the section its `kind` calls for, and a story that draws nothing says so rather than leaving a section empty. A `kind: function` story carries a `## Render Floor` whose every claim is settled without a vision model — present, absent, not overflowing, the right colour at a known point. A `kind: finish` story carries a `## Visual Contract` naming the approved mockup it is judged against.
+- **Satisfiable**: Every row of a `## Render Floor` or `## Visual Contract` can actually hold on the fixture that same section declares. A row demanding a composition the declared fixture cannot produce is an intent gap — HALT. It is never repaired by rewording the row to match what happened to render.
 - **Complete**: No placeholders or TBDs.
 - **Sufficient**: No known requirement, acceptance, dependency, or implementation gaps remain unresolved.
 - **Coherent**: No unresolved ambiguities or internal contradictions.
