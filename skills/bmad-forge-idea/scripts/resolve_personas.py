@@ -92,11 +92,16 @@ def find_party_skill(project_root: Path, skill_root: Path):
     """Locate the installed bmad-party-mode skill dir, or None.
 
     Skills install as siblings, so the party skill is almost always next to
-    this one. A couple of common install roots cover the rest.
+    this one — including when the agent loaded us through a symlink from a
+    second skill root (Codex reads `.codex/skills/`, Claude Code reads
+    `.claude/skills/`), because the sibling lookup follows the resolved path.
+    The remaining candidates cover the install roots we know of.
     """
     candidates = [
         skill_root.parent / PARTY_SKILL,
         project_root / ".claude" / "skills" / PARTY_SKILL,
+        project_root / ".codex" / "skills" / PARTY_SKILL,
+        project_root / ".agents" / "skills" / PARTY_SKILL,
         project_root / "_bmad" / "skills" / PARTY_SKILL,
     ]
     for c in candidates:

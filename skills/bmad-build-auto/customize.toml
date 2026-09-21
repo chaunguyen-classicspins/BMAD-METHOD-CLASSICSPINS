@@ -58,9 +58,12 @@ Implement in **stages, each stage its own subagent**. One context carried across
 until every turn re-reads it: the measured single-agent run reached 285 turns and a 742k peak context
 and cost $30.74, against $8.11 for the same story split in two — 320k and 309k peaks, and neither stage
 rewrote a file the other had written. Every stage runs with **no prior conversation context**, on the
-Sonnet model — pass the host's per-subagent model override (in Claude Code, the Agent tool's
-`model: "sonnet"` parameter). If the host offers no such override, launch on the default model and note
-the fallback in your step-03 output rather than halting. Launch a stage, wait for it synchronously, then
+**Opus** model — pass the host's per-subagent model override (in Claude Code, the Agent tool's
+`model: "opus"` parameter). If the host offers no such override, launch on the default model and note
+the fallback in your step-03 output rather than halting. (This is under measurement: on one story the
+same spec cost 54 turns / 9.3M tokens / $5.76 on Sonnet against 21 turns / 2.3M / $9.75 on Opus, with
+34 tests green instead of 28. Whether the better diff earns back the extra $4 downstream is exactly
+what the finding ceiling above now lets us read.) Launch a stage, wait for it synchronously, then
 launch the next with the previous stage's report in hand. **Never re-engage a stage that has already
 reported** — the fresh context is the point, not a fallback.
 
@@ -117,11 +120,21 @@ leaves the task, names it in its report, and moves on; it never reaches across t
 it. A stage that writes outside its owned globs is a bug in the split — re-do the axis choice, not the
 edit.
 
-**Recovery is capped at one.** If a stage reports unclosed bullets from inside its own owned files,
-dispatch **one** recovery stage with a fresh Sonnet context, its scope narrowed to exactly those
-unclosed bullets. If the recovery stage itself reports unclosed bullets, HALT with `intent_gap` in the
-run's ATTENTION file and hand back to the operator — do not spiral into a third attempt. Fixes for
-defects surfaced by step-04 review go through the patch branch, not through a new implementation stage.
+**Closeout is ONE stage for the whole split, not one per parent stage.** When the stages have all
+reported, collect **every** unclosed bullet from **every** stage report — whoever reported it and
+whichever stage owns the file — and dispatch **one** closeout stage with a fresh context on the same
+model the stages run on. Its owned globs are the **union** of the globs of the stages whose files
+those bullets name. By this point nothing runs in parallel and no stage is still writing, so the
+file-ownership contract is protecting nothing: splitting closeout along glob lines buys one more cold
+start and one more full verify cycle, and buys them for nothing. Measured on story 7.1: three items
+came out of a single Stage-3 report and were split into two recovery agents because the rule said
+*per parent stage* — 11.0 min / $5.22 and 34.5 min / $15.01, of which **51% and 69% respectively was
+re-running `gate.sh` and the EditMode suite a second time** on a change whose whole unblocking payload
+was three lines of asmdef, one prefab number and four addressables entries.
+
+If the closeout stage itself reports unclosed bullets, HALT with `intent_gap` in the run's ATTENTION
+file and hand back to the operator — do not spiral into a second attempt. Fixes for defects surfaced
+by step-04 review go through the patch branch, not through a new implementation stage.
 
 Give each stage this prompt, with `<STAGE>` replaced by its sentence from the table below, `<FILES>`
 replaced by its owned file globs (one per line), and — for every stage after the first — the previous
@@ -141,18 +154,33 @@ stage's report appended verbatim underneath that sentence:
 >
 > **Round-trip discipline.** Every turn re-sends your whole context to the model, so one extra turn costs far more than one extra tool call inside a turn. Batch by dependency, not by habit:
 >
-> - **Batch what is independent through `Tools/pf/pf-probe`.** Reads, greps and inspections of different files go in ONE call, each result capped so one fat file cannot flood a context you re-send for the rest of the stage:
+> - **Every independent `Read` goes in the SAME message, too.** `Read` is not a shell command, so the pf-exec rule does not reach it and the contract is easy to satisfy on paper while still spending one turn per file. Ten files you already know you want are ONE message carrying ten `Read` calls, or one `pf-exec` with ten `read FILE:L1-L2` items — never ten turns. Measured on this project: an implementer that had already copied ten prior-art files into one folder with a single command then read them back **one per turn** — ten model turns for one message's work.
+> - **Every independent shell command goes through `Tools/pf/pf-exec` — it is the batched SHELL door, not an inspection tool.** Reads and greps, but equally `dotnet build`, `dotnet test`, a gate script, a `git` query, a `ls ~/.nuget`. N commands in ONE call, run in parallel, **each result capped** so one fat output cannot flood a context you re-send for the rest of the stage. Measured on this project: an exploration that ran as **26 separate model calls** was 26 independent commands — two `pf-exec` calls. Before you send a single command, ask what else you already know you will need and send the set. Parallel `Bash` calls in one message save the same turns but cap nothing, so prefer `pf-exec` whenever output size is uncertain:
 >
 >   ```
->   Tools/pf/pf-probe --cap 2k <<'EOF'
+>   Tools/pf/pf-exec --cap 2k <<'EOF'
 >   sig     : rg -n "class RowBadgeView" Assets/<sku>
 >   slice   : read Assets/<sku>/Design/Tokens.cs:1-40
 >   callers : rg -n "ItemViewFactory" Assets/<sku> -l
 >   EOF
 >   ```
 >
->   It runs the items in parallel, marks each `EMPTY` / `TRUNCATED n->m` / `exit N`, and a failing item never aborts the others. `read FILE:L1-L2` replaces a `Read` call. Raise `--cap` for one item and rerun it alone when the cut mattered — that is one cheap turn against a blob you would otherwise carry to the end of the stage. Several edits to the same file still go in one message the ordinary way.
+>   It runs the items in parallel, marks each `EMPTY` / `TRUNCATED n->m` / `exit N`, and a failing item never aborts the others. `read FILE:L1-L2` replaces a `Read` call. Raise `--cap` for one item and rerun it alone when the cut mattered — that is one cheap turn against a blob you would otherwise carry to the end of the stage. Ordered shell — build, then test, then gate — is the same door with `--ordered --stop-on-fail --reduce auto`, so a red compile never pays for the test run behind it.
+> - **Put every write you already know you need in ONE message.** Your host sends as many `Write` and `Edit` calls as you emit in a single assistant message, and runs them all before it calls you again — six files created together cost ONE turn, six files created one per step cost six, and each of those six re-sends your whole context. Measured on this project: the same six-file task costs 47k context tokens batched against 330k one-at-a-time. Only a write whose content depends on a result you have not seen yet earns its own turn.
+> - **`Tools/pf/pf-write` is for the batch that must not half-apply**, not for batching as such — several files that have to land together or not at all. It validates every item before touching anything and rolls the whole tree back on any failure; paths must sit inside the working directory.
+>
+>   ```
+>   Tools/pf/pf-write <<'EOF'
+>   [ {"op":"edit","path":"Assets/<sku>/A.cs","old":"var x = 1;","new":"var x = 2;"},
+>     {"op":"edit","path":"Assets/<sku>/B.cs","old":"foo(","new":"bar(","count":3},
+>     {"op":"write","path":"Assets/<sku>/C.cs","text":"// whole file\n"},
+>     {"op":"delete","path":"Assets/<sku>/Old.cs"} ]
+>   EOF
+>   ```
+>
+>   JSON, so nothing you write can collide with a delimiter. **All-or-nothing, the opposite of `pf-exec`:** every item is validated before anything is touched, and a failure mid-apply rolls the whole tree back — a half-applied batch of mutations is worse than no batch. `edit` needs exactly `count` occurrences (default 1) and refuses an ambiguous match rather than guessing it. `--dry-run` validates without writing. Group the edits you already know you need; an edit whose content depends on a test result you have not seen yet is not one of them.
 > - **Never batch across a dependency.** Do not guess the output of a compile, a test run, an editor refresh, or a file you have not read yet. When the next call's input depends on this call's result, take the extra turn — that is what turns are for.
+> - **Run the repo's test door, never a command you composed yourself.** A project's engine-free suite almost always carries tests that are deliberately outside a per-edit loop — a sweep, a soak, a fuzz — kept out by a filter its gate script owns (`DEFAULT_TEST_FILTER="TestCategory!=Slow"` in this layout). `dotnet test <project>` with no `--filter` runs them all. Measured on this project: one unfiltered invocation pulled in a 10 000-level generator sweep, sat at 98% CPU for over twenty minutes across four attempts in a single story, was killed as a hung test host, and cost ~35 minutes of wall clock — for a suite that takes 90 seconds behind the filter. So the engine-free rung is `sh Tools/pf/gate.sh`, and if you are about to type `dotnet test` with a project path and no filter, read the gate script first. Where the tree carries a `[Slow]` attribute the sweeps also ignore themselves unless `PF_RUN_SLOW=1`, so a `Skipped` line naming that flag is the expected result and not a problem to fix. **Cap anything whose termination you are unsure of** with `Tools/pf/pf-timeout SECONDS COMMAND …` — exit `124`, and it kills the child's whole process group, so a `dotnet test` that forked a `testhost` leaves no orphan holding the next run out. **macOS has no `timeout(1)`**: `timeout 480 …` is `command not found`, and re-running uncapped after that is where the cost lands.
 > - **One red test run, one fix pass.** When a run comes back red, fix every error visible in that output before re-running. Fixing one error per cycle is the most expensive habit available to you.
 > - **Read a file once.** Do not re-read a file you wrote or edited yourself unless something outside this session changed it. Your own edit already told you the new content.
 > - **Type-check in the shell before you refresh Unity.** A compile error found by `dotnet build` is one Bash turn (~1 s cold, ~0.5 s incremental), no Editor state, ~200 tokens of output. Finding the same error through `assets-refresh` + `console-get-logs` is a domain reload + MCP round-trip + a log payload you carry for the rest of the stage. Run after any `.cs` edit before you touch `pf-mcp`:
@@ -176,6 +204,14 @@ stage's report appended verbatim underneath that sentence:
 >   editor-application-set-state {"state":"stop"}
 >   EOF
 >   ```
+>
+>   `pf-mcp --timeout` is **seconds** and is forwarded to the CLI, whose own default is **60**: a `tests-run` that legitimately takes longer comes back `Tool call timed out after 60 seconds` while the Editor finishes the suite behind it. That is a client-side abort, not a Unity failure — raise `--timeout` rather than answering it with a `sleep`, and when a tool returns `Processing` (a domain reload deferred the run), poll the artefact it writes **by mtime**. A fixed `sleep 300` after an 88-second suite buys five minutes for ninety seconds of work, twice over, at full context.
+>
+>   **Scope the test run while you iterate; run the whole assembly ONCE, at the end.** `tests-run` takes `testClass` and `testAssembly`. Measured on story 7.1: `{"testMode":"EditMode","testAssembly":"Game.Tests.Editor","testClass":"BootGraphResolvesTests"}` returned in **9.9 s**; the same suite unscoped returned in **165 s** — and the overhead outside the runner is only ~8 s either way, so the 155 s difference is Render-Floor fixtures rendering into textures and reading pixels back, paid in full to learn whether three boot tests are green. One closing unscoped run proves the suite; every run before it should name its class.
+>
+>   **The Editor is single-threaded and a client abort does NOT abort it.** When a call comes back `timed out`, `exit 1`, or `Processing`, the suite is usually still running inside Unity — so an immediate retry lands on a busy Editor and fails again. Ask before you retry: `editor-application-get-state` is a cheap one-off call and it answers *is it still busy?*, which is the question a `sleep` is guessing at. Measured on story 7.1: one 300 s client abort, then three retries against a busy Editor, then a blind `sleep 240` — **11 minutes** spent on a suite that takes 2 min 40 s.
+>
+>   **Two timeout ceilings, and the outer one is your host's.** `pf-timeout 1500 Tools/pf/pf-mcp --timeout 1400` still dies at your tool runner's own default (two minutes in Claude Code's `Bash`) unless you ALSO raise that tool's `timeout` parameter. Setting only the inner one reads as a Unity failure and costs the whole wait twice.
 >
 >   Items run **in order** — the Editor is single-threaded — each payload reduced in the shell (`logs-brief`, `test-summary`, `screenshot-path`, `raw`; the default is chosen from the tool name). `--stop-on-fail` is the default, so a red compile never pays for the test run, the play-mode entry and the capture behind it. **`screenshot-path` returns a path, not pixels**: an image costs ~2.9k tokens of permanent context, so look at it with `Read` only once you actually need to judge it. This is the one place batching across a dependency is correct — the script sequences and inspects, you never guess a result. Keep the direct `mcp__…` tools for one-off calls whose result is already small (`editor-application-get-state`, `scene-list-opened`, a targeted `assets-find`). Detail: the `pf-gates` skill.
 > - **Resolve tool schemas in one pass.** If the host defers tool schemas behind a search tool, search once for every tool this story will plausibly need, not once per tool.
@@ -223,8 +259,8 @@ The `<STAGE>` sentences, by the axis that chose the cut:
 **Finish story — cut by surface** (name the surface or the batch in place of `<SURFACE>`)
 - Each stage: *Bring `<SURFACE>` up to its `## Visual Contract` against the approved mockup that contract names, and touch no other surface. Diagnose before you edit, and stop at the bounds the contract sets.* — the second and later stages append: *Every prior surface is already settled and its reference capture accepted: do not re-open it.*
 
-**Recovery stage** (dispatched at most once per parent stage, per the Recovery cap above; append the parent stage's owned globs verbatim and the exact bullets it reported unclosed)
-- *Close only the bullets listed below, staying inside the file globs shown; report any bullet you still cannot close, and do not attempt further recovery.*
+**Closeout stage** (exactly one per split, per the Closeout rule above; append the UNION of the owned globs of every stage whose files the unclosed bullets name, plus those bullets verbatim as their reporters wrote them)
+- *Close only the bullets listed below, staying inside the file globs shown; report any bullet you still cannot close, and do not attempt further closeout.*
 """
 
 # Review selection: "none" launches no lens and skips triage, "quick" runs
@@ -251,6 +287,8 @@ Read `{spec_file}` — the story or spec holding the acceptance criteria and int
 
 Report unmet acceptance criteria, broken rules, and bugs. Each finding: the location, what goes wrong, and evidence checked against the surrounding code. Output a Markdown list of findings only — no severity, priority, or ranking.
 
+**Batch your reading.** Every turn re-sends your whole context, so N inspections in N turns bill that context N times. You inspect and report — you never edit — so almost nothing you look at depends on the previous result: put every independent read or grep of one round into ONE call. Use `Tools/pf/pf-exec` where the repo ships it (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice); otherwise put several reads in one message. Do not spend a turn checking whether it exists — run it; if the shell says command not found, that one failed call is your answer and you fall back to several reads in one message.
+
 Do not invoke any skill, and do not spawn subagents of your own — you are the reviewer. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.
 
 """
@@ -263,12 +301,14 @@ Launch a context-free subagent with this prompt:
 
 Conduct a review of CONTENT.
 Look for what's missing, not only what's wrong.
-Compute your finding floor N from the diff file's size: N = min(floor(sqrt(kB) + 1), 10), where kB is the file's size in kilobytes. State the arithmetic in one line, then find at least N issues to fix or improve.
+Compute a finding CEILING N from the diff file's size: N = min(floor(sqrt(kB) + 1), 6), where kB is the file's size in kilobytes. State the arithmetic in one line, then report **at most N** findings — the N most consequential, ordered worst first. Fewer is right when fewer is what you found; an empty list is a valid answer for a clean diff. Never pad to reach a count, and never report a wording or comment nit while a behavioural defect is unreported.
+Each finding is three sentences at most: where (`file:line`), what is wrong, and what goes wrong if it ships. No preamble, no closing summary.
 Output a Markdown list of findings only — no severity, priority, or ranking.
 If the content is empty, stop and say so.
-If you have zero findings, re-check and keep thinking; do not stop with an empty list.
 
 CONTENT: the unified diff at `{diff_file}`. Read that file — it is the content under review.
+
+**Batch your reading.** Every turn re-sends your whole context, so N inspections in N turns bill that context N times. You inspect and report — you never edit — so almost nothing you look at depends on the previous result: put every independent read or grep of one round into ONE call. Use `Tools/pf/pf-exec` where the repo ships it (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice); otherwise put several reads in one message. Do not spend a turn checking whether it exists — run it; if the shell says command not found, that one failed call is your answer and you fall back to several reads in one message.
 
 Do not invoke any skill, and do not spawn subagents of your own — you are the reviewer. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.
 
@@ -286,6 +326,8 @@ claims_file (leave unread until your instructions call for it): {claims_file}
 
 Review content: the unified diff at `{diff_file}`. Read that file — it is the content under review.
 
+**Batch your reading.** Every turn re-sends your whole context, so N inspections in N turns bill that context N times. You inspect and report — you never edit — so almost nothing you look at depends on the previous result: put every independent read or grep of one round into ONE call. Use `Tools/pf/pf-exec` where the repo ships it (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice); otherwise put several reads in one message. Do not spend a turn checking whether it exists — run it; if the shell says command not found, that one failed call is your answer and you fall back to several reads in one message.
+
 Do not invoke any skill, and do not spawn subagents of your own — you are the reviewer. If the instruction file is unreadable, report that exact failure and stop. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.
 
 """
@@ -299,6 +341,8 @@ Launch a context-free subagent with this prompt:
 Read `{skill-root}/review-prompts/verification-gap.md` completely and follow it as your review instructions.
 
 Review content: the unified diff at `{diff_file}`. Read that file — it is the content under review.
+
+**Batch your reading.** Every turn re-sends your whole context, so N inspections in N turns bill that context N times. You inspect and report — you never edit — so almost nothing you look at depends on the previous result: put every independent read or grep of one round into ONE call. Use `Tools/pf/pf-exec` where the repo ships it (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice); otherwise put several reads in one message. Do not spend a turn checking whether it exists — run it; if the shell says command not found, that one failed call is your answer and you fall back to several reads in one message.
 
 Do not invoke any skill, and do not spawn subagents of your own — you are the reviewer. If the instruction file is unreadable, report that exact failure and stop. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.
 
@@ -317,6 +361,8 @@ You are an intent-alignment auditor. You have no other context about how this ch
 The diff is the unified diff at `{diff_file}`. Read that file — it is the change under review.
 
 Your task is strictly descriptive — do not prescribe additional work. Report: (1) the defensible readings of the intent, enumerated; (2) which reading this diff implements; (3) where the readings and the diff diverge — specifically, which surface the intent's expectations live at versus which surface the diff's changes and its tests exercise.
+
+**Batch your reading.** Every turn re-sends your whole context, so N inspections in N turns bill that context N times. You inspect and report — you never edit — so almost nothing you look at depends on the previous result: put every independent read or grep of one round into ONE call. Use `Tools/pf/pf-exec` where the repo ships it (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice); otherwise put several reads in one message. Do not spend a turn checking whether it exists — run it; if the shell says command not found, that one failed call is your answer and you fall back to several reads in one message.
 
 Do not invoke any skill, and do not spawn subagents of your own — you are the reviewer. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.
 

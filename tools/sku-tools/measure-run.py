@@ -196,6 +196,77 @@ def read_only(x):
     return all(RO.match(c) and not any(k in c for k in RW) for c in x['cmds'])
 
 
+# --- shell-level batching -------------------------------------------------
+# A turn is one tool call, but `a && b && c` is three inspections and
+# `sed -n '1,5p;40,60p'` is two. `multi-call` counts CALLS and is blind to both:
+# measured on story 1.1, MAIN scored 2% multi-call while actually running 2.19
+# inspections per call — the best of any actor in that session. Counting calls
+# alone therefore reports a good batcher as a trickler and inflates headroom.
+
+OP = re.compile(r"^\s*(grep|rg|sed|cat|ls|head|tail|wc|find|awk|nl|jq|stat|diff|git)\b")
+RANGE = re.compile(r"\d+,\d+p")
+# A batched-inspection call carries its items in a heredoc, so the items never
+# appear at the start of a segment and OP cannot see them. Counting such a call
+# as one inspection under-reports exactly the tool this metric exists to reward.
+PROBE_ITEM = re.compile(r"^\s*[\w.\-/]+\s*:\s*\S")           # pf-exec:  `label : command`
+EXEC_NAMES = ('pf-exec', 'pf-probe')   # pf-probe is the pre-rename name, still shimmed
+MCP_ITEM = re.compile(r"^\s*[a-z][a-z0-9-]*\s+\{")              # pf-mcp:   `tool-name {json}`
+
+
+def batched_items(c):
+    """Items inside a pf-exec / pf-mcp heredoc, or 0 when this is not one."""
+    if any(n in c for n in EXEC_NAMES):
+        return sum(1 for ln in c.splitlines() if PROBE_ITEM.match(ln))
+    if 'pf-mcp' in c:
+        return sum(1 for ln in c.splitlines() if MCP_ITEM.match(ln))
+    return 0
+
+
+def split_cmd(c):
+    """Top-level `&&`, `||`, `;` and newline separators, ignoring quoted text.
+
+    Pipes are deliberately NOT separators: `cat x | grep y` is one inspection
+    that reduces in the shell, which is the behaviour we want to reward.
+    """
+    out, cur, quote, i = [], [], None, 0
+    while i < len(c):
+        ch = c[i]
+        if quote:
+            if ch == quote: quote = None
+            cur.append(ch); i += 1; continue
+        if ch in "'\"":
+            quote = ch; cur.append(ch); i += 1; continue
+        if c.startswith('&&', i) or c.startswith('||', i):
+            out.append(''.join(cur)); cur = []; i += 2; continue
+        if ch in ';\n':
+            out.append(''.join(cur)); cur = []; i += 1; continue
+        cur.append(ch); i += 1
+    out.append(''.join(cur))
+    return out
+
+
+def ops(x):
+    """Inspection operations in a turn, counting batching done in the shell.
+
+    Non-Bash calls count one each. A Bash call counts its read-ish segments
+    (`echo` labels do not count — they are captions, not inspections), plus one
+    per extra range in a multi-range `sed -n`. A Bash call that inspects nothing
+    still counts one, so a turn is never zero.
+    """
+    n = 0
+    for name, c in zip(x['tools'], x['cmds']):
+        if name != 'Bash':
+            n += 1
+            continue
+        k = batched_items(c)
+        if not k:
+            for part in split_cmd(c):
+                if OP.match(part.strip()):
+                    k += 1 + max(0, len(RANGE.findall(part)) - 1)
+        n += max(k, 1)
+    return n
+
+
 MCP_BASH = ("unity-mcp-cli",)
 
 
@@ -231,12 +302,17 @@ def batch_stats(t):
     i.e. every turn sitting inside a run of same-kind single-call turns."""
     tool_turns = [x for x in t if x['tools']]
     multi = sum(1 for x in tool_turns if len(x['tools']) > 1)
-    single = lambda p: lambda x: p(x) and len(x['tools']) == 1
-    ro = run_lengths(t, single(read_only))
-    mc = run_lengths(t, single(mcp_turn))
+    total_ops = sum(ops(x) for x in tool_turns)
+    # Trickling means ONE inspection in the turn — not one tool call. A single
+    # Bash call running `a && b && c` is already batched; charging it as headroom
+    # is what overstated the R5 figure (447 turns) that Round 4 was planned on.
+    trickle = lambda p: lambda x: p(x) and ops(x) <= 1
+    ro = run_lengths(t, trickle(read_only))
+    mc = run_lengths(t, trickle(mcp_turn))
     saved = sum(n - 1 for n in ro) + sum(n - 1 for n in mc)
     billed_per_turn = sum(x['ctx'] for x in t) / max(len(t), 1)
     return dict(multi=multi, tool_turns=len(tool_turns), ro=ro, mc=mc,
+                ops=total_ops, per_turn=total_ops / max(len(tool_turns), 1),
                 saved=saved, headroom=saved * billed_per_turn / 1e6)
 
 
@@ -278,8 +354,10 @@ for name, model, t in rows:
           f"   | read-only runs: {runs_summary(t)}")
     b = batch_stats(t)
     pct = 100 * b['multi'] / max(b['tool_turns'], 1)
-    print(f"    batching: {b['multi']}/{b['tool_turns']} tool turns multi-call ({pct:.0f}%)"
-          f"  | single-call runs ro={sorted(b['ro'], reverse=True)[:5]} mcp={sorted(b['mc'], reverse=True)[:5]}"
+    print(f"    batching: {b['per_turn']:.2f} inspections/turn ({b['ops']} total)"
+          f"  | {b['multi']}/{b['tool_turns']} tool turns multi-call ({pct:.0f}%)")
+    print(f"    trickle runs (1 inspection): ro={sorted(b['ro'], reverse=True)[:5]} "
+          f"mcp={sorted(b['mc'], reverse=True)[:5]}"
           f"  | headroom {b['saved']} turns / {b['headroom']:.1f}M billed")
     if 'Implement' in name or 'implement' in name:
         d = collections.Counter(len(x['tools']) for x in t)

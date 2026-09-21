@@ -112,15 +112,15 @@ Write `lenses_ran` — the ids launched, in launch order — to `{spec_file}` fr
      Apply the patches yourself.
 {% else %}
   {% if workflow.route == "full" %}
-     Launch a subagent with no prior conversation context, running on the Sonnet model, and wait for it synchronously. Give it exactly this message, with the findings filled in and `{spec_file}` / `{diff_file}` substituted:
+     Launch a subagent with no prior conversation context, running on the Opus model, and wait for it synchronously. Give it exactly this message, with the findings filled in and `{spec_file}` / `{diff_file}` substituted:
   {% else %}
-     On the full route, launch a subagent with no prior conversation context, running on the Sonnet model, and wait for it synchronously. Give it exactly this message, with the findings filled in and `{spec_file}` / `{diff_file}` substituted:
+     On the full route, launch a subagent with no prior conversation context, running on the Opus model, and wait for it synchronously. Give it exactly this message, with the findings filled in and `{spec_file}` / `{diff_file}` substituted:
   {% endif %}
 
      ```text
      Review of your implementation found problems. Fix each one below with the smallest change that does the job.
 
-     Read {spec_file} — the sections `## Boundaries & Constraints`, `## Code Map`, `## Design Notes`, `## Spec Change Log`, and the `## Tasks & Acceptance` entries for the files named below. The unified diff of the change under review is at {diff_file}. Read every file you are about to change from disk before you change it — the diff is history, disk is truth.
+     Read {spec_file} — the sections `## Boundaries & Constraints`, `## Code Map`, `## Design Notes`, `## Spec Change Log`, and the `## Tasks & Acceptance` entries for the files named below. The unified diff of the change under review is at {diff_file}. Read every file you are about to change from disk before you change it — the diff is history, disk is truth. Read them in ONE call rather than one per turn — `Tools/pf/pf-exec` where the repo ships it (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice), otherwise several reads in one message: every turn re-sends your whole context, so reading six files over six turns bills that context six times. Do not spend a turn checking whether it exists — run it; if the shell says command not found, that one failed call is your answer and you fall back to several reads in one message. Edits, test runs and commits are decisions and keep their own turns. **One file, one edit.** Several findings below land in the same file; do not apply them one `Edit` at a time. Read that file once, work out every change it needs, then apply them all in a SINGLE `Edit`/`Write` on that file — a rewrite of the whole file is fine and usually clearest. Across files, those single-per-file edits still go out in ONE message together: your host runs every `Write`/`Edit` call a single assistant message carries before it calls you again, so a second consecutive message carrying one more edit to a file you already edited means you split work you already knew. Measured on this project: the same review round applied eight separate `Edit` calls to one file across eight turns without this paragraph and two with it. Keep `Tools/pf/pf-write` (JSON ops, validated first, all-or-nothing, rolled back on any failure) for the batch that must not half-apply.
 
      Run only the tests that cover the files you edit — nothing wider. Full verification runs on my side after you return. Before you reply, append to {spec_file}'s `## Spec Change Log` every decision a later reader could not re-derive from the code, and every approach you ruled out.
 

@@ -23,23 +23,71 @@ refuses to run with the fork itself as the root. Useful flags:
 | `--skills-only` | mirror skills, leave `Tools/bmad/` alone |
 | `--tools-only` | mirror `Tools/bmad/` only; skips skills and `bmad doctor` |
 | `--no-doctor` | mirror both channels, skip `bmad doctor` |
+| `--codex-mirror <mode>` | what to publish to `.codex/skills/`: `bmad` (default), `all`, `none` |
+| `--no-codex` | alias for `--codex-mirror none` |
 | `--dry-run` | report what would change, write nothing |
 
 `uv` is required — `bmad doctor` runs through it.
 
-## The two channels
+## The three channels
 
-| source in this fork | destination in the SKU |
+| source | destination in the SKU |
 | --- | --- |
-| `skills/*` | `<root>/.claude/skills/` |
-| `tools/sku-tools/*` | `<root>/Tools/bmad/` |
+| this fork's `skills/*` | `<root>/.claude/skills/` |
+| the SKU's `.claude/skills/*` | `<root>/.codex/skills/` (symlinks) |
+| this fork's `tools/sku-tools/*` | `<root>/Tools/bmad/` |
 
-Skills matching `bmad-loop-*` are skipped: they come from a different repo. A
-skill that exists in the SKU but not in the fork is never deleted — that is how a
-SKU's non-bmad skills survive a sync.
+Skills matching `bmad-loop-*` are skipped by the first channel: they come from a
+different repo. A skill that exists in the SKU but not in the fork is never
+deleted — that is how a SKU's non-bmad skills survive a sync.
 
-After both channels are mirrored the script runs `bmad doctor` in the SKU to
+After the channels are mirrored the script runs `bmad doctor` in the SKU to
 reconcile `_bmad/scripts`.
+
+## `.codex/skills/` — the same method, for Codex CLI
+
+Codex CLI discovers project skills under `<root>/.codex/skills/` (and
+`<root>/.agents/skills/`). It does **not** read `.claude/skills/`, so a SKU that
+only has the Claude Code layout gives a Codex session no BMAD skills at all.
+
+The format itself needs no translation: a Codex skill is the same
+`<name>/SKILL.md` folder with `name` and `description` frontmatter, which is
+exactly what these skills already are. So the second channel publishes the tree
+rather than converting it, as **relative symlinks** — `.codex/skills/bmad-build`
+-> `../../.claude/skills/bmad-build`. One payload, two front doors, and no way
+for the two catalogs to drift apart. Git stores the symlinks, so a teammate's
+clone gets Codex support without running anything.
+
+`--codex-mirror` chooses what is published:
+
+- `bmad` (default) — every `bmad*` skill in `.claude/skills/`, `bmad-loop-*`
+  included. Those are BMAD too, even though a different repo installs them.
+- `all` — every skill directory in `.claude/skills/`, `pf-*` and the generated
+  Unity MCP skills included. Worth knowing before you reach for it: a skill's
+  name and description sit in the model's context from the start of every
+  session, so mirroring ~130 skills costs context in exchange for reach.
+- `none` (or `--no-codex`) — leave `.codex/skills/` alone entirely.
+
+Switching mode is safe in both directions: links this channel owns (the ones
+pointing at `../../.claude/skills/`) are pruned when they fall outside the
+current mode or lose their target. Nothing else in the directory is touched — a
+real skill directory the SKU keeps under `.codex/skills/`, or a symlink pointing
+anywhere else, survives every sync.
+
+The skills' own scripts resolve their skill root before reading anything under
+it, so being entered through a symlink changes nothing at runtime, and
+`bmad doctor` still finds its siblings.
+
+### What does not carry over
+
+The skills are portable; two things around them are not.
+
+- **`.claude/settings.json` hooks** (the `bmad-loop` SessionStart/Stop hooks)
+  are Claude Code's. Codex has its own hooks under `.codex/hooks`; the loop is
+  installed separately and is not part of this sync.
+- **Subagent wording.** Skills that fan work out to subagents describe Claude
+  Code's Task tool. Codex has its own subagents, so the work still happens —
+  the prose just names the wrong doorbell.
 
 ## `tools/sku-tools/` — shared method tooling
 

@@ -6,23 +6,35 @@
 # The script lives in the SOURCE repo, not in the consumer: a new SKU copies
 # nothing. You `cd` into this fork and point the script at the target.
 #
-# Two channels, one run:
+# Three channels, one run:
 #   skills/*          ->  <root>/.claude/skills/      (bmad-loop-* excluded)
+#   .claude/skills/*  ->  <root>/.codex/skills/       (symlinks, for Codex CLI)
 #   tools/sku-tools/* ->  <root>/Tools/bmad/          (stamped as generated)
 #
 # Skills present in the SKU but absent from the fork are left alone — that is how
 # non-bmad skills and the separately-managed bmad-loop-* skills survive a sync.
 #
+# Codex CLI reads project skills from <root>/.codex/skills/ and does NOT look in
+# .claude/skills/, so the same skill tree is published there as relative symlinks
+# rather than copied: one payload, two front doors, no drift between them. Only
+# symlinks that point back into .claude/skills/ are ever removed, so a real skill
+# directory a SKU keeps under .codex/skills/ survives a sync untouched.
+#
 # Usage:
 #   tools/sync-to-sku.sh --root <path-to-sku>
 #   tools/sync-to-sku.sh                        # --root defaults to $PWD
 #
-#   --root <path>   the project to sync into (default: the current directory)
-#   --skills-only   mirror skills, skip Tools/bmad
-#   --tools-only    mirror Tools/bmad, skip skills and `bmad doctor`
-#   --no-doctor     mirror everything, skip `bmad doctor`
-#   --dry-run       report what would change, write nothing
-#   -h, --help      this text
+#   --root <path>          the project to sync into (default: the current directory)
+#   --skills-only          mirror skills, skip Tools/bmad
+#   --tools-only           mirror Tools/bmad, skip skills and `bmad doctor`
+#   --codex-only           only publish .codex/skills from what the SKU already has
+#   --no-doctor            mirror everything, skip `bmad doctor`
+#   --codex-mirror <mode>  what to publish to .codex/skills: bmad (default, every
+#                          bmad* skill including the separately-managed bmad-loop-*),
+#                          all (every skill in .claude/skills), or none
+#   --no-codex             alias for --codex-mirror none
+#   --dry-run              report what would change, write nothing
+#   -h, --help             this text
 #
 set -euo pipefail
 
@@ -34,6 +46,9 @@ ROOT=""
 DO_SKILLS=1
 DO_TOOLS=1
 DO_DOCTOR=1
+DO_CODEX=1
+CODEX_ONLY=0
+CODEX_MIRROR="bmad"
 DRY=0
 
 usage() { awk 'NR==1{next} /^set -euo/{exit} /^#/{sub(/^# ?/,""); print}' "$0"; }
@@ -43,14 +58,33 @@ while [ $# -gt 0 ]; do
     --root)        shift; [ $# -gt 0 ] || { echo "error: --root needs a path" >&2; exit 2; }; ROOT="$1" ;;
     --root=*)      ROOT="${1#--root=}" ;;
     --skills-only) DO_TOOLS=0 ;;
-    --tools-only)  DO_SKILLS=0; DO_DOCTOR=0 ;;
+    --tools-only)  DO_SKILLS=0; DO_DOCTOR=0; DO_CODEX=0 ;;
+    --codex-only)  CODEX_ONLY=1 ;;
     --no-doctor)   DO_DOCTOR=0 ;;
+    --codex-mirror)   shift; [ $# -gt 0 ] || { echo "error: --codex-mirror needs a mode" >&2; exit 2; }; CODEX_MIRROR="$1" ;;
+    --codex-mirror=*) CODEX_MIRROR="${1#--codex-mirror=}" ;;
+    --no-codex)    CODEX_MIRROR="none" ;;
     --dry-run)     DRY=1 ;;
     -h|--help)     usage; exit 0 ;;
     *)             echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
 done
+
+# --codex-only wins over the other channel switches; a `none` mirror wins over
+# everything, including --codex-only, which then has nothing left to do.
+if [ "$CODEX_ONLY" = "1" ]; then
+  DO_SKILLS=0
+  DO_TOOLS=0
+  DO_DOCTOR=0
+  DO_CODEX=1
+fi
+if [ "$CODEX_MIRROR" = "none" ]; then DO_CODEX=0; fi
+
+case "$CODEX_MIRROR" in
+  bmad|all|none) ;;
+  *) echo "error: --codex-mirror must be bmad, all or none (got: $CODEX_MIRROR)" >&2; exit 2 ;;
+esac
 
 ROOT="${ROOT:-$PWD}"
 [ -d "$ROOT" ] || { echo "error: --root is not a directory: $ROOT" >&2; exit 1; }
@@ -78,6 +112,7 @@ echo "    root:    $ROOT"
 [ "$DRY" = "1" ] && echo "    MODE:    dry run, nothing is written"
 
 SKILLS_DIR="$ROOT/.claude/skills"
+CODEX_DIR="$ROOT/.codex/skills"
 TOOLS_DIR="$ROOT/Tools/bmad"
 
 # ---------------------------------------------------------------- skills ----
@@ -106,6 +141,84 @@ if [ "$DO_SKILLS" = "1" ]; then
     echo "    synced: $name"
   done
   echo "==> $copied skill(s) synced, $skipped skipped"
+fi
+
+# ----------------------------------------------------------------- codex ----
+# Codex CLI discovers project skills under <root>/.codex/skills/ and never looks
+# at .claude/skills/, so the tree is published there a second time. Symlinks, not
+# copies: a copy would be a second payload to keep in step, and the two would
+# drift the first time anything wrote to one of them. Each link is relative, so
+# it survives the project being moved or cloned elsewhere.
+codex_linked=0
+codex_pruned=0
+if [ "$DO_CODEX" = "1" ]; then
+  echo ""
+  echo "==> codex   $SKILLS_DIR -> $CODEX_DIR  (mirror: $CODEX_MIRROR)"
+
+  # Which skills belong in the Codex catalog. `bmad` keeps it to the method
+  # itself — bmad-loop-* included, since those are BMAD too even though a
+  # different repo owns them. `all` publishes whatever else the SKU installed.
+  selected=""
+  if [ -d "$SKILLS_DIR" ]; then
+    for skill in "$SKILLS_DIR"/*/; do
+      [ -d "$skill" ] || continue
+      name="$(basename "$skill")"
+      if [ "$CODEX_MIRROR" = "bmad" ]; then
+        case "$name" in
+          bmad|bmad-*) ;;
+          *) continue ;;
+        esac
+      fi
+      selected="$selected$name
+"
+    done
+  fi
+
+  if [ -z "$selected" ]; then
+    echo "    note: no skills in $SKILLS_DIR match the mirror — nothing to publish"
+  else
+    [ "$DRY" = "1" ] || mkdir -p "$CODEX_DIR"
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      link="$CODEX_DIR/$name"
+      target="../../.claude/skills/$name"
+
+      # A real directory here is the SKU's own Codex-only skill. Never clobber it.
+      if [ -e "$link" ] && [ ! -L "$link" ]; then
+        echo "    keep:   $name (not a symlink — left as the SKU has it)"
+        continue
+      fi
+      if [ "$DRY" = "0" ]; then
+        ln -snf "$target" "$link"
+      fi
+      codex_linked=$((codex_linked + 1))
+      echo "    linked: $name"
+    done <<EOF
+$selected
+EOF
+  fi
+
+  # Drop links we own that no longer name a skill — a skill dropped from the
+  # fork, or one the current mirror mode excludes. Anything else in the
+  # directory is somebody else's and is left where it is.
+  if [ -d "$CODEX_DIR" ]; then
+    for link in "$CODEX_DIR"/*; do
+      [ -L "$link" ] || continue
+      name="$(basename "$link")"
+      dest="$(readlink "$link")"
+      case "$dest" in
+        ../../.claude/skills/*) ;;
+        *) continue ;;
+      esac
+      if printf '%s' "$selected" | grep -qxF "$name"; then
+        continue
+      fi
+      [ "$DRY" = "0" ] && rm -f "$link"
+      codex_pruned=$((codex_pruned + 1))
+      echo "    pruned: $name"
+    done
+  fi
+  echo "==> $codex_linked skill(s) published to Codex, $codex_pruned pruned"
 fi
 
 # ------------------------------------------------------------- sku tools ----

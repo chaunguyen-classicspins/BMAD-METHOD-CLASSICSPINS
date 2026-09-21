@@ -60,3 +60,13 @@ Use these headings:
 
 - **If the epics file is missing or the target epic is not found:** write nothing and report the problem to the calling agent. Goal and Stories cannot be populated without a usable epics file.
 - **If planning artifacts are missing or empty:** still produce the file with Goal and Stories populated from the epics file. Under Requirements & Constraints, write: "Planning artifacts were unavailable; only epics-file context was used." Never hallucinate content to fill missing sections.
+
+## Before you start
+
+**Batch your reading.** Every turn re-sends your whole context, so N reads in N turns bill that
+context N times. Almost nothing you read here depends on a previous result: put every independent
+read or grep of one round into ONE call. Use `Tools/pf/pf-exec` where the repo ships it (heredoc of
+`label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice);
+otherwise put several reads in one message. Do not spend a turn checking whether it exists — run it;
+if the shell says command not found, that one failed call is your answer and you fall back to
+several reads in one message. The compiled file is one write: draft it whole, write it once.
