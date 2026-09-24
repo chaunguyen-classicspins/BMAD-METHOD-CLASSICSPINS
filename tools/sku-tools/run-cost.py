@@ -45,10 +45,9 @@ ROOTS = sorted(glob.glob(os.path.expanduser("~/.ccs/instances/*/projects/" + SLU
     os.path.expanduser("~/.claude/projects/" + SLUG)
 ]
 
-# input $/M, output $/M, cache-write $/M, cache-read $/M
-PRICE = {"opus": (15.0, 75.0, 18.75, 1.50),
-         "sonnet": (3.0, 15.0, 3.75, 0.30),
-         "haiku": (1.0, 5.0, 1.25, 0.10)}
+# One price table for every bmad-loop cost tool: claude_prices.py beside this file.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import claude_prices  # noqa: E402
 
 # The project's baseline run, produced by THIS script at these definitions. Keys: story, wall_min,
 # cost, sleep_s, unity_calls, unity_min, suites, gates, legs, longest_min, legs_union_min,
@@ -65,17 +64,41 @@ def load_baseline():
         return None
 
 
-def family(model):
-    m = (model or "").lower()
-    return next((k for k in PRICE if k in m), "opus")
-
-
 def stamp(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
 
 
 def hhmm(t):
     return datetime.fromtimestamp(t).strftime("%H:%M")
+
+
+STORY_COMMAND = re.compile(r"<command-name>/?bmad-(?:build|dev)-auto</command-name>")
+STORY_ARGS = re.compile(r"<command-args>([0-9]+-[0-9]+-[a-z0-9-]+)")
+# A resumed run (`/bmad-build-auto Resume review of the in-review spec at …/spec-<slug>.md`) names
+# its story only through the spec path.
+STORY_SPEC = re.compile(r"<command-args>[^<]*?spec-([0-9]+-[0-9]+-[a-z0-9-]+?)\.md")
+
+
+def invoked_story(line):
+    """The story a session was STARTED on: the slug in its own `/bmad-build-auto <slug>` prompt.
+
+    Only a user prompt counts — a string, not a tool result. A session that merely READ another
+    run's transcript carries the same `<command-args>…` text inside a tool result, and matching the
+    raw line once made an unrelated chat session pass for that story's run.
+    """
+    try:
+        entry = json.loads(line)
+    except ValueError:
+        return None
+    if entry.get("type") != "user":
+        return None
+    content = (entry.get("message") or {}).get("content")
+    if isinstance(content, list):
+        content = "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+    if not isinstance(content, str) or not STORY_COMMAND.search(content):
+        return None
+    m = STORY_ARGS.search(content) or STORY_SPEC.search(content)
+    return m.group(1) if m else None
 
 
 def sessions():
@@ -88,9 +111,8 @@ def sessions():
                 for i, line in enumerate(fh):
                     if i > 60:
                         break
-                    m = re.search(r"command-args>([0-9]+-[0-9]+-[a-z0-9-]+)", line)
-                    if m:
-                        slug = m.group(1)
+                    slug = invoked_story(line)
+                    if slug:
                         break
             if slug:
                 out.append((os.path.getmtime(path), slug, path))
@@ -191,6 +213,17 @@ def classify(call):
     return call["tool"].replace("mcp__ai-game-developer__", "MCP: ")
 
 
+def tree_cost(path):
+    """List-price USD of one session tree (main + subagents), final streamed entry per message."""
+    _, usage, (t0, t1) = collect(path)
+    final = {}
+    for n, (src, mid, model, u) in enumerate(usage):
+        key = (src, mid) if mid else (src, n)
+        if key not in final or (u.get("output_tokens") or 0) >= (final[key][3].get("output_tokens") or 0):
+            final[key] = (src, mid, model, u)
+    return sum(claude_prices.cost(m, u) or 0.0 for _, _, m, u in final.values()), t0, t1
+
+
 def report(slug, path):
     calls, usage, (t0, t1) = collect(path)
     wall = t1 - t0
@@ -201,28 +234,40 @@ def report(slug, path):
           f"   |  {len(calls)} tool calls  |  {len(set((s, i) for s, i, _, _ in usage))} model turns")
 
     # --- cost -----------------------------------------------------------------------------------
-    seen, tok, cost_of = set(), defaultdict(lambda: [0, 0, 0, 0]), defaultdict(float)
-    for src, mid, model, u in usage:
-        if mid and (src, mid) in seen:
+    tok, cost_of = defaultdict(lambda: [0, 0, 0, 0, 0.0]), defaultdict(float)
+    unpriced, read_cost = Counter(), 0.0
+    # One assistant message is streamed as several transcript entries that all carry a usage
+    # block. In a subagent transcript the FIRST one holds a partial output count (measured: 15k of
+    # a leg's 224k output tokens), so keep the entry with the largest output, never the first.
+    final = {}
+    for n, (src, mid, model, u) in enumerate(usage):
+        key = (src, mid) if mid else (src, n)
+        if key not in final or (u.get("output_tokens") or 0) >= (final[key][3].get("output_tokens") or 0):
+            final[key] = (src, mid, model, u)
+    for src, mid, model, u in final.values():
+        i, o, w5, w1, cr = claude_prices.split(u)
+        c = claude_prices.cost(model, u)
+        if c is None:
+            if i + o + w5 + w1 + cr:
+                unpriced[model or "?"] += i + o + w5 + w1 + cr
             continue
-        seen.add((src, mid))
-        fam = family(model)
-        vals = (u.get("input_tokens", 0), u.get("output_tokens", 0),
-                u.get("cache_creation_input_tokens", 0), u.get("cache_read_input_tokens", 0))
-        for i, v in enumerate(vals):
-            tok[fam][i] += v
-        cost_of[src] += sum(v * p for v, p in zip(vals, PRICE[fam])) / 1e6
+        key = claude_prices.rate(model)[0]
+        for k, v in enumerate((i, o, w5 + w1, cr)):
+            tok[key][k] += v
+        tok[key][4] += c
+        cost_of[src] += c
+        read_cost += claude_prices.cache_read_cost(model, u)
 
     total = sum(cost_of.values())
     print(f"\n  COST (list API prices)                                    ${total:,.2f}")
-    print(f"    {'':14s}{'input':>12s}{'output':>12s}{'cache write':>14s}{'cache read':>14s}{'$':>10s}")
-    for fam, (i, o, cw, cr) in tok.items():
-        p = PRICE[fam]
-        c = (i * p[0] + o * p[1] + cw * p[2] + cr * p[3]) / 1e6
-        print(f"    {fam:14s}{i:12,d}{o:12,d}{cw:14,d}{cr:14,d}{c:10.2f}")
-    opus = tok.get("opus", [0, 0, 0, 0])
-    share = opus[3] * PRICE["opus"][3] / 1e6 / total if total else 0.0
-    print(f"    cache read is {share:.0%} of spend   ({opus[3] / 1e6:.1f}M tokens re-sent)")
+    print(f"    {'':18s}{'input':>11s}{'output':>11s}{'cache write':>14s}{'cache read':>14s}{'$':>10s}")
+    for key, (i, o, cw, cr, c) in sorted(tok.items(), key=lambda kv: -kv[1][4]):
+        print(f"    {key:18s}{i:11,d}{o:11,d}{cw:14,d}{cr:14,d}{c:10.2f}")
+    for model, n in unpriced.items():
+        print(f"    UNPRICED {model}: {n:,d} tokens left out of the total — add it to claude_prices.py")
+    share = read_cost / total if total else 0.0
+    reread = sum(v[3] for v in tok.values())
+    print(f"    cache read is {share:.0%} of spend   ({reread / 1e6:.1f}M tokens re-sent)")
     print(f"    orchestrator ${cost_of.get('main', 0):,.2f}"
           f"  |  subagents ${total - cost_of.get('main', 0):,.2f}")
 
@@ -309,6 +354,18 @@ def main():
     if not hits:
         sys.exit(f"run-cost: no run matching '{a.story}'. Try --list.")
     report(hits[0][1], hits[0][2])
+    # A story that paused (an escalation) and resumed ran in more than one session. The report
+    # above is the newest one; the story's total is every session that ran it.
+    same = [f for f in hits if f[1] == hits[0][1]]
+    if len(same) > 1:
+        print(f"\n  THIS STORY RAN IN {len(same)} SESSIONS (the report above is the newest)")
+        total = 0.0
+        for _, _, path in sorted(same):
+            c, t0, t1 = tree_cost(path)
+            total += c
+            print(f"    {datetime.fromtimestamp(t0):%m-%d %H:%M} -> {datetime.fromtimestamp(t1):%H:%M}"
+                  f"   wall {(t1 - t0) / 60:6.1f} min   ${c:8.2f}   {os.path.basename(path)[:8]}")
+        print(f"    story total ${total:,.2f}")
     return 0
 
 

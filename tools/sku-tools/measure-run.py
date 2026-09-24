@@ -135,7 +135,11 @@ def resolve(arg):
 
 
 SESS = resolve(POS[0] if POS else None)
-RATES = {'claude-opus-5': (5, 25, .5, 6.25, 10.), 'claude-sonnet-5': (2, 10, .2, 2.5, 4.)}
+# One price table for every bmad-loop cost tool. The old exact-id dict priced `claude-opus-5-5`
+# (and every model it did not list) at ZERO, so an Opus 5.5 session measured as free.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import claude_prices  # noqa: E402
+UNPRICED = collections.Counter()
 
 def scan(path):
     order, msg = [], {}
@@ -144,20 +148,25 @@ def scan(path):
         except: continue
         if d.get('type') == 'cost-state': msg['__cost__'] = d
         if d.get('type') != 'assistant': continue
-        m = d['message']; mid = m['id']
-        if mid not in msg:
-            order.append(mid); u = m['usage']; cc = u.get('cache_creation') or {}
-            r = RATES.get(m.get('model'), (0, 0, 0, 0, 0))
+        m = d['message']; mid = m['id']; u = m['usage']
+        # A message is streamed as several entries; a subagent's FIRST one carries a partial output
+        # count, so price the entry with the largest output (the final one), not the first.
+        out = u.get('output_tokens', 0) or 0
+        if mid not in msg or out >= msg[mid]['_out']:
+            if mid not in msg:
+                order.append(mid)
+            c = claude_prices.cost(m.get('model'), u)
+            prev = msg.get(mid, {})
             msg[mid] = dict(
                 ctx=u.get('input_tokens', 0) + u.get('cache_read_input_tokens', 0) + u.get('cache_creation_input_tokens', 0),
-                cost=(u.get('input_tokens', 0)*r[0] + u.get('output_tokens', 0)*r[1]
-                      + u.get('cache_read_input_tokens', 0)*r[2]
-                      + cc.get('ephemeral_5m_input_tokens', 0)*r[3]
-                      + cc.get('ephemeral_1h_input_tokens', 0)*r[4]) / 1e6,
-                tools=[], cmds=[])
+                cost=c or 0.0, _out=out, _unpriced=(m.get('model') or '?') if c is None else None,
+                _n=sum(claude_prices.split(u)), tools=prev.get('tools', []), cmds=prev.get('cmds', []))
         msg[mid]['tools'] += [p['name'] for p in m.get('content', []) if p.get('type') == 'tool_use']
         msg[mid]['cmds'] += [str(p['input'].get('command', p['input'].get('file_path', '')))
                              for p in m.get('content', []) if p.get('type') == 'tool_use']
+    for m in order:
+        if msg[m]['_unpriced'] and msg[m]['_n']:
+            UNPRICED[msg[m]['_unpriced']] += msg[m]['_n']
     return [msg[m] for m in order], msg.get('__cost__')
 
 RO = re.compile(r"^\s*(cd [^&|;]*&&\s*)?(grep|rg|sed -n|cat |ls |head |tail |wc |find |awk|shasum|git (log|diff|status|show)|echo )")
@@ -364,3 +373,6 @@ for name, model, t in rows:
         ts = collections.Counter(n for x in t for n in x['tools'])
         print(f"    calls/turn dist {dict(sorted(d.items()))}")
         print(f"    ToolSearch={ts['ToolSearch']}  turns-after-first-report: xem journal SendMessage")
+
+for _model, _n in UNPRICED.items():
+    print(f"UNPRICED {_model}: {_n:,d} tokens counted as $0 above — add the model to claude_prices.py")
