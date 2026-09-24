@@ -62,7 +62,10 @@ back green. Then re-run that command yourself and read its result.
 
 **One dispatch per audit.** If the same audit would need a second one, the audit is not the problem —
 HALT with status `blocked`, naming the audit and what the first dispatch failed to close, rather than
-taking the work over.
+taking the work over. The **Visual Contract Audit** is the one exception: its correction loop
+dispatches once per round, and the judge's `LOOP:` line — not this rule — bounds how many rounds it
+gets. Visual work moves many rows per pass, and a single dispatch turned the audit's round budget into
+a budget of one.
 
 What stays in the parent: running the verification commands, reading the diff, and judging. If the
 host cannot launch a subagent, do the work here and record that fallback in `## Implementation Notes`.
@@ -95,15 +98,15 @@ If `{spec_file}` contains a `## Visual Contract`, settle **every** row against a
 - **violated** — enter the correction loop below. A violated row is never carried forward.
 - **cannot-tell** — the image genuinely cannot settle this claim. Name the field assertion that does settle it, add that assertion under `## Tasks & Acceptance`, and make it run. `cannot-tell` with no assertion named is an unaudited claim and counts as missing.
 
-**The correction loop. Diagnose before you edit.** Load, in the same context, the approved mockup the contract names, the current capture, and the previous round's capture. Then write down, in `## Implementation Notes`: the symptom you can see, the cause in the code or tokens that produces it, and the change you will make. Only then edit. Tuning a parameter because a row is red, without naming the cause, is what turns one defect into four identical rounds — the verdict tells you a row is wrong, and only the capture beside its mockup tells you why.
+**The correction loop. Diagnose before you edit.** Load, in the same context, the reference the failing row was judged against (its V-line cites the image number), the current capture, and the previous round's capture. Then write down, in `## Implementation Notes`: the symptom you can see, the cause in the code or tokens that produces it, and the change you will make. Only then edit. Tuning a parameter because a row is red, without naming the cause, is what turns one defect into four identical rounds — the verdict tells you a row is wrong, and only the capture beside its mockup tells you why.
 
 Keep the judge independent of that reasoning: it settles rows against the contract and is never asked what to change. Your diagnosis is yours — the three images have to sit in one context to produce it, and that context is this one. **The edit that follows it is not.** Hand the written diagnosis (symptom, cause, change) to a subagent per "Who writes, in this step", then re-capture and re-judge here. Diagnosing costs this session three images; diagnosing *and* editing costs it the whole correction loop.
 
 **Stop conditions, whichever comes first:**
 
 - Every row settled — the audit passes.
-- The contract's round budget is spent — HALT with status `blocked` and blocking condition `visual round budget exhausted`, naming the rows still red and what each round changed.
-- **The same row comes back violated twice with no pixel change between the two captures** — the render did not move, so the row is not describing something this surface can reach. HALT with status `blocked` and blocking condition `intent gap`, naming the row. Do not spend the rest of the budget on it, and do not reword the row.
+- The judge's `LOOP:` line says `stop (…)` — the round budget is spent, or (under the progress policy) a round cleared nothing. HALT with status `blocked` and blocking condition `visual round budget exhausted`, naming the rows still red, the LOOP line's reason, and what each round changed.
+- **The judge exits `3` (HALT)** — the same row came back violated on pixels that did not move, so the row is not describing something this surface can reach. HALT with status `blocked` and blocking condition `intent gap`, naming the row. Do not spend the rest of the budget on it, and do not reword the row.
 
 Judge the capture, never your intent or an implementation subagent's report. If the audit cannot otherwise be satisfied, HALT with status `blocked` and blocking condition `visual contract audit failed`.
 
