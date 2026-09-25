@@ -78,6 +78,9 @@ Under `{project-root}/_bmad/custom/`:
 - `{skill-name}.toml` — team, committed. Policies, org conventions, compliance.
 - `{skill-name}.user.toml` — user, gitignored. Personal tone, private facts, shortcuts.
 
+Never write `{skill-name}.pf.toml`. PrototypeFramework's agent-doc sync generates it
+(layered under the team file) and reverts any hand edit; project policy goes in `{skill-name}.toml`.
+
 Default by character (policy → team, personal → user), confirm before writing.
 
 ## Step 6: Show, confirm, write, verify
@@ -91,7 +94,7 @@ Default by character (policy → team, personal → user), confirm before writin
    ```
    Show the merged output, point out the changed fields.
 
-   **Resolver missing or fails:** read whichever layers exist — `<install-path>/customize.toml` (base), `{project-root}/_bmad/custom/{skill-name}.toml` (team), `{project-root}/_bmad/custom/{skill-name}.user.toml` (user) — apply base → team → user with the same merge rules (scalars override, tables deep-merge, `code`/`id`-keyed arrays merge by key, all other arrays append), describe how the changed fields resolve.
+   **Resolver missing or fails:** read whichever layers exist — `<install-path>/customize.toml` (base), `{project-root}/_bmad/custom/{skill-name}.pf.toml` (PrototypeFramework, generated), `{project-root}/_bmad/custom/{skill-name}.toml` (team), `{project-root}/_bmad/custom/{skill-name}.user.toml` (user) — apply base → pf → team → user with the same merge rules (scalars override, tables deep-merge, `code`/`id`-keyed arrays merge by key, all other arrays append), describe how the changed fields resolve.
 
    **Verify shows override didn't land** (field unchanged, merge conflict, file not picked up): re-enter Step 4 with the verify output as context. Usually wrong field name, wrong merge mode (scalar vs array), or wrong scope.
 5. Summarize what changed, where the file lives, how to iterate. Remind the user to commit team overrides.

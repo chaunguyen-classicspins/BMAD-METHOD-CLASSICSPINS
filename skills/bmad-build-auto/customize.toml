@@ -36,7 +36,9 @@ route = "auto"
 
 route_selection = """
 Decide whether to use a coding subagent (full) or implement directly (oneshot).
-Using the information already gathered, with no further reading and minimal
+If the story is `kind: finish`: full, always — its judge loop, audit and visual lens exist only on
+the full route.
+Otherwise, using the information already gathered, with no further reading and minimal
 extra reasoning, estimate the lines of code to add or modify.
 100 lines or fewer: oneshot. Otherwise: full.
 If the change touches more than five files and is not simple or mechanical,
@@ -302,9 +304,10 @@ Launch a context-free subagent with this prompt:
 
 Conduct a review of CONTENT.
 Look for what's missing, not only what's wrong.
-Compute a finding CEILING N from the diff file's size: N = min(floor(sqrt(kB) + 1), 6), where kB is the file's size in kilobytes. State the arithmetic in one line, then report **at most N** findings — the N most consequential, ordered worst first. Fewer is right when fewer is what you found; an empty list is a valid answer for a clean diff. Never pad to reach a count, and never report a wording or comment nit while a behavioural defect is unreported.
-Each finding is three sentences at most: where (`file:line`), what is wrong, and what goes wrong if it ships. No preamble, no closing summary.
+Work the whole diff. Before reporting, state in one line how many files and how many hunks you read.
 Output a Markdown list of findings only — no severity, priority, or ranking.
+Report only defects you can point at in the diff. Do not pad the list to reach a count, and do not file a finding you would not defend at its file and line.
+An empty list is an acceptable result, but only as a conclusion you reached — not a default you fell back to. If you find nothing, say so explicitly and name the two or three places you looked hardest.
 If the content is empty, stop and say so.
 
 CONTENT: the unified diff at `{diff_file}`. Read that file — it is the content under review.
@@ -349,22 +352,43 @@ Do not invoke any skill, and do not spawn subagents of your own — you are the 
 
 """
 
+# Intent Alignment: DISABLED in the base (2026-09-25), for every project.
+#
+# The renderer drops any lens whose instruction is empty (render_skill.py
+# `_format_review_layers`), and keyed arrays merge by `id`, so an empty
+# instruction here switches the lens off while keeping its slot.
+#
+# Evidence, measured on two bmad-loop runs (20260919-172845-007a and
+# 20260920-053609-d4d6) in a PrototypeFramework SKU:
+#   - The lens cost $3.65 and $4.67 and ran 3.2 and 3.6 minutes on the
+#     critical path.
+#   - Its own prompt binds it to "strictly descriptive — do not prescribe
+#     additional work", so it cannot produce a finding in `patch` shape.
+#   - In 007a every finding only this lens reported was dropped at step-04
+#     triage; in neither run did one of its findings reach the patch agent.
+# The other three lenses read the same diff and still cover intent through
+# `verification-gap` (spec against tests) and `blind-hunter` (the whole diff).
+#
+# Re-enable in a project: add to `_bmad/custom/bmad-build-auto.toml`
+#
+#   [[workflow.thorough_lenses]]
+#   id = "intent-alignment"
+#   name = "Intent Alignment Auditor"
+#   instruction = """
+#   Launch a subagent with this prompt:
+#
+#   Read `{skill-root}/review-prompts/intent-alignment.md` completely and follow it as your review instructions.
+#
+#   Here is the verbatim intent this work started from:
+#
+#   {verbatim_intent}
+#
+#   The diff is the unified diff at `{diff_file}`. Read that file — it is the change under review.
+#   """
+#
+# The auditor's full prompt is kept in review-prompts/intent-alignment.md.
+
 [[workflow.thorough_lenses]]
 id = "intent-alignment"
 name = "Intent Alignment Auditor"
-instruction = """
-Launch a subagent with this prompt:
-
-You are an intent-alignment auditor. You have no other context about how this change was produced. Here is the verbatim intent this work started from:
-
-{verbatim_intent}
-
-The diff is the unified diff at `{diff_file}`. Read that file — it is the change under review.
-
-Your task is strictly descriptive — do not prescribe additional work. Report: (1) the defensible readings of the intent, enumerated; (2) which reading this diff implements; (3) where the readings and the diff diverge — specifically, which surface the intent's expectations live at versus which surface the diff's changes and its tests exercise.
-
-**Batch your reading.** Every turn re-sends your whole context, so N inspections in N turns bill that context N times. You inspect and report — you never edit — so almost nothing you look at depends on the previous result: put every independent read or grep of one round into ONE call. Use `Tools/pf/pf-exec` where the repo ships it (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice); otherwise put several reads in one message. Do not spend a turn checking whether it exists — run it; if the shell says command not found, that one failed call is your answer and you fall back to several reads in one message.
-
-Do not invoke any skill, and do not spawn subagents of your own — you are the reviewer. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.
-
-"""
+instruction = ""

@@ -85,6 +85,54 @@ class ConfigUtilsTests(unittest.TestCase):
             self.assertNotIn("stray", merged["value"])
             self.assertEqual(load_customization(root, skill)["value"]["order"], "user")
 
+    def test_pf_layer_sits_between_base_and_team(self):
+        """base customize.toml < <skill>.pf.toml < <skill>.toml < <skill>.user.toml."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            custom = root / "_bmad" / "custom"
+            skill = root / "_bmad" / "bmm" / "sample-skill"
+            custom.mkdir(parents=True)
+            skill.mkdir(parents=True)
+            (skill / "customize.toml").write_text(
+                '[workflow]\nscalar = "base"\nfacts = ["base"]\n'
+                '[[workflow.lenses]]\nid = "shipped"\ninstruction = "base"\n',
+                encoding="utf-8",
+            )
+            pf = custom / "sample-skill.pf.toml"
+            team = custom / "sample-skill.toml"
+            user = custom / "sample-skill.user.toml"
+            pf.write_text(
+                '[workflow]\nscalar = "pf"\nfacts = ["pf"]\n'
+                '[[workflow.lenses]]\nid = "pf-lens"\ninstruction = "from pf"\n',
+                encoding="utf-8",
+            )
+
+            merged = load_customization(root, skill)["workflow"]
+            self.assertEqual(merged["scalar"], "pf")
+            self.assertEqual(merged["facts"], ["base", "pf"])
+            self.assertEqual(
+                merged["lenses"],
+                [{"id": "shipped", "instruction": "base"}, {"id": "pf-lens", "instruction": "from pf"}],
+            )
+
+            team.write_text(
+                '[workflow]\nscalar = "team"\nfacts = ["team"]\n'
+                '[[workflow.lenses]]\nid = "pf-lens"\ninstruction = "team replaced pf"\n',
+                encoding="utf-8",
+            )
+            user.write_text('[workflow]\nfacts = ["user"]\n', encoding="utf-8")
+
+            merged = load_customization(root, skill)["workflow"]
+            self.assertEqual(merged["scalar"], "team")
+            self.assertEqual(merged["facts"], ["base", "pf", "team", "user"])
+            self.assertEqual(
+                merged["lenses"],
+                [{"id": "shipped", "instruction": "base"}, {"id": "pf-lens", "instruction": "team replaced pf"}],
+            )
+
+            user.write_text('[workflow]\nscalar = "user"\n', encoding="utf-8")
+            self.assertEqual(load_customization(root, skill)["workflow"]["scalar"], "user")
+
 
 if __name__ == "__main__":
     unittest.main()

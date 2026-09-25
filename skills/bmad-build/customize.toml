@@ -36,7 +36,9 @@ route = "auto"
 
 route_selection = """
 Decide whether to use a coding subagent (full) or implement directly (oneshot).
-Using the information already gathered, with no further reading and minimal
+If the story is `kind: finish`: full, always — its judge loop, audit and visual lens exist only on
+the full route.
+Otherwise, using the information already gathered, with no further reading and minimal
 extra reasoning, estimate the lines of code to add or modify.
 100 lines or fewer: oneshot. Otherwise: full.
 If the change touches more than five files and is not simple or mechanical,
@@ -83,11 +85,22 @@ open_spec = ""
 # substituted at run time.
 
 implementation_handoff = """
-Launch a subagent with no prior conversation context, with this prompt:
+Launch ONE subagent with no prior conversation context, on the **Opus** model (in Claude Code, the
+Agent tool's `model: "opus"` parameter; if the host offers no such override, launch on the default
+model and say so in your step-03 output), and wait for it synchronously. Never re-engage it after it
+has reported — follow-up work goes to a fresh subagent. Prompt:
 
-> Read {spec_file} fully and implement it — the spec is the sole source of truth. Load every file listed in its frontmatter `context:` before you start.
+> Read {spec_file}'s contract in full and implement it — the spec is the sole source of truth. The contract is the frontmatter and every section from `## Intent` through `## Implementation Notes`, plus `## Design Notes` and `## Verification`; `## Spec Change Log` and `## Review Triage Log` you open by line range only when a bullet sends you there. Load every file listed in its frontmatter `context:` before you start.
 >
-> When done, report what you changed, how you verified it, and anything left incomplete or risky.
+> **Round-trip discipline.** Every turn re-sends your whole context. Put every independent read, grep or shell command of one round in ONE message or ONE `Tools/pf/pf-exec` call (heredoc of `label : command` lines, run in parallel, each output capped, `read FILE:L1-L2` for a slice). Put every write you already know you need in ONE message. Use `Tools/pf/pf-write` only for a batch that must land all-or-nothing, and `Tools/pf/pf-mcp` to sequence Unity MCP calls.
+>
+> **Verify exactly as `## Verification` writes it.** `sh Tools/pf/gate.sh`; then MCP `assets-refresh` in its own call; then ONE `Tools/pf/pf-tests --auto` (the Slow capture tier only when the diff draws). Never run Unity batchmode (`pf-build.sh`) and never the PlayMode suite.
+>
+> **If the spec is `kind: finish`:** re-capture the fixtures after every change, then judge with exactly `Tools/pf/visual-judge.sh --spec {spec_file} --caller stage` — nothing else on the line, Bash timeout 900000, never inside a shorter `pf-timeout` — and follow its `LOOP:` line (`continue` / `stop (…)` / `done`). Exit `2` is a broken capture pipeline, not a UI defect; exit `3` is a row the fixture cannot satisfy — stop and report it, never reword the row. Every colour, gap and size goes into `Views/DesignTokens.cs`, never a literal in a View. After the judge exits 0 on the final captures, run `Tools/pf/promote-reference.sh <surface id> <every capture in the block>`.
+>
+> **Stop before you sprawl.** After roughly 120 tool calls, stop where the code is consistent and report what is done and what remains.
+>
+> Report what you changed, each verification command with its exit code, the judge's final verdict per row when the spec is finish, and anything left incomplete or risky.
 """
 
 # Review selection: "none" launches no lens and skips triage, "quick" runs

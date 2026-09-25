@@ -123,6 +123,19 @@ class ScannerTest(unittest.TestCase):
         self.assertTrue(entry["has_team_override"])
         self.assertFalse(entry["has_user_override"])
 
+    def test_pf_override_flagged_separately_from_team(self):
+        _make_skill(
+            self.skills,
+            "bmad-build-auto",
+            "[workflow]\npersistent_facts = []\n",
+            "---\nname: bmad-build-auto\ndescription: Build auto.\n---\n",
+        )
+        (self.custom / "bmad-build-auto.pf.toml").write_text("[workflow]\n")
+        entry = MODULE.scan_skills([self.skills], self.root)["workflows"][0]
+        self.assertTrue(entry["has_pf_override"])
+        self.assertFalse(entry["has_team_override"])
+        self.assertTrue(entry["pf_override_path"].endswith("bmad-build-auto.pf.toml"))
+
     def test_missing_surface_block_reports_error(self):
         _make_skill(self.skills, "bmad-broken", "[not_a_surface]\nfoo = 1\n")
         result = MODULE.scan_skills([self.skills], self.root)

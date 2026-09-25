@@ -1,6 +1,7 @@
 ---
 title: '{title}'
 type: 'feature' # feature | bugfix | refactor | chore
+kind: 'function' # function | finish — finish = the change is how an existing surface LOOKS (route full; ## Visual Contract + visual-judge block)
 created: '{date}'
 status: 'draft' # draft | ready-for-dev | in-progress | in-review | done
 route: '' # oneshot | full — set by step-02
