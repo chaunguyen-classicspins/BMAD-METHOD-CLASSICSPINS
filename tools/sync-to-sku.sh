@@ -294,5 +294,18 @@ if [ "$DO_TOOLS" = "1" ] && [ "$DRY" = "0" ]; then
   fi
 fi
 
+# ---------------------------------------------- PrototypeFramework layer ----
+# A SKU on PrototypeFramework gets the framework's facts and lenses for the build skills as
+# _bmad/custom/<skill>.pf.toml, written by the framework's agent-doc sync — not by this script. That
+# sync only writes them where _bmad/ exists, so a SKU whose BMAD was installed AFTER the Setup Wizard
+# ran has none until someone re-syncs. Say so rather than let the build skills run without them.
+if [ -f "$ROOT/Packages/manifest.json" ] && grep -q '"com.classicspins.prototype-framework"' "$ROOT/Packages/manifest.json" \
+   && ! ls "$ROOT"/_bmad/custom/*.pf.toml >/dev/null 2>&1; then
+  echo ""
+  echo "==> NOTE: this SKU consumes PrototypeFramework but has no _bmad/custom/*.pf.toml yet."
+  echo "    Run Framework/Agent Docs/Sync in the Editor (or the framework's pf-build.sh agentdocs)"
+  echo "    so the build skills get the framework's facts and the visual-gate lens."
+fi
+
 echo ""
 echo "==> Sync complete"

@@ -313,6 +313,7 @@ class RenderSkillTests(unittest.TestCase):
     def test_undeclared_persistent_key_halts_and_unread_declared_key_renders(self):
         ws = self._workspace()
         skill = self._fixture_skill(ws, '[workflow]\nmessage = "base"\nunread = "base"\n', "{{ workflow.message }}")
+        pf = ws.bmad / "custom" / f"{skill.name}.pf.toml"
         team = ws.bmad / "custom" / f"{skill.name}.toml"
         user = ws.bmad / "custom" / f"{skill.name}.user.toml"
         # A declared key this render never reads is still a valid persistent override.
@@ -332,6 +333,11 @@ class RenderSkillTests(unittest.TestCase):
             ),
             (team, "[workflow.message]\nnested = true\n", r"workflow\.message\.nested$"),
             (team, 'message = "top level"\n', r"does not declare: message$"),
+            (
+                pf,
+                '[workflow]\nmesage = "typo"\n',
+                r"fixture\.pf\.toml sets keys fixture does not declare: workflow\.mesage$",
+            ),
         ):
             with self.subTest(layer=layer.name, content=content):
                 layer.write_text(content, encoding="utf-8")

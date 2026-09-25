@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Resolve a skill's default, team, and user TOML customization layers."""
+"""Resolve a skill's default, PrototypeFramework (`.pf.toml`), team, and user TOML customization layers."""
 
 import argparse
 import json
@@ -13,7 +13,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 try:
-    from config_utils import ConfigError, load_customization
+    from config_utils import ConfigError, customization_layers, load_customization
 except ModuleNotFoundError as error:
     if error.name != "tomllib":
         raise
@@ -76,7 +76,7 @@ def candidate_project_roots(skill_dir: Path) -> list[Path]:
 
 def has_override(root: Path, skill_name: str) -> bool:
     custom_dir = root / "_bmad" / "custom"
-    return any((custom_dir / name).is_file() for name in (f"{skill_name}.toml", f"{skill_name}.user.toml"))
+    return any(layer.is_file() for layer in customization_layers(custom_dir, skill_name))
 
 
 def warn_on_masked_override(chosen: Path, rejected: list[Path], skill_name: str) -> None:

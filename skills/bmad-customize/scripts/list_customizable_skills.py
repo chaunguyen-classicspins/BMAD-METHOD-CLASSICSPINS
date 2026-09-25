@@ -123,6 +123,8 @@ def scan_skills(
             seen_names.add(skill_name)
 
             description = read_frontmatter_description(skill_dir / "SKILL.md")
+            # Written by the PrototypeFramework agent-doc sync; reported, never a write target.
+            pf_override = custom_dir / f"{skill_name}.pf.toml"
             team_override = custom_dir / f"{skill_name}.toml"
             user_override = custom_dir / f"{skill_name}.user.toml"
 
@@ -131,8 +133,10 @@ def scan_skills(
                 "install_path": str(skill_dir),
                 "skills_root": str(root),
                 "description": description,
+                "has_pf_override": pf_override.is_file(),
                 "has_team_override": team_override.is_file(),
                 "has_user_override": user_override.is_file(),
+                "pf_override_path": str(pf_override),
                 "team_override_path": str(team_override),
                 "user_override_path": str(user_override),
             }

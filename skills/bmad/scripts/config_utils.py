@@ -104,13 +104,30 @@ def load_central_config(project_root: Path) -> dict[str, Any]:
     )
 
 
+def customization_layers(custom_dir: Path, skill_name: str) -> tuple[Path, Path, Path]:
+    """A skill's persistent override files under `_bmad/custom/`, lowest precedence first.
+
+    - `<skill>.pf.toml` — written by the PrototypeFramework agent-doc sync
+      (`Framework/Agent Docs/Sync`); generated, never hand-edited.
+    - `<skill>.toml` — the project's own team layer, committed.
+    - `<skill>.user.toml` — personal, gitignored.
+
+    The skill's shipped `customize.toml` sits below all three.
+    """
+    return (
+        custom_dir / f"{skill_name}.pf.toml",
+        custom_dir / f"{skill_name}.toml",
+        custom_dir / f"{skill_name}.user.toml",
+    )
+
+
 def load_customization(project_root: Path | None, skill_dir: Path) -> dict[str, Any]:
     skill_name = skill_dir.name
     custom_dir = project_root / "_bmad" / "custom" if project_root else None
+    overrides = customization_layers(custom_dir, skill_name) if custom_dir else ()
     return merge_layers(
         (
             load_toml(skill_dir / "customize.toml", required=True),
-            load_toml(custom_dir / f"{skill_name}.toml") if custom_dir else {},
-            load_toml(custom_dir / f"{skill_name}.user.toml") if custom_dir else {},
+            *(load_toml(layer) for layer in overrides),
         )
     )

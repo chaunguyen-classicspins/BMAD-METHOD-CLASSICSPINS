@@ -44,6 +44,11 @@ deleted — that is how a SKU's non-bmad skills survive a sync.
 After the channels are mirrored the script runs `bmad doctor` in the SKU to
 reconcile `_bmad/scripts`.
 
+On a SKU that consumes PrototypeFramework it then checks for `_bmad/custom/*.pf.toml` — the
+framework's layer for the build skills, written by the framework's agent-doc sync only where `_bmad/`
+already exists — and prints a NOTE to run `Framework/Agent Docs/Sync` when there is none (the usual
+case for a SKU whose BMAD was installed after its Setup Wizard ran).
+
 ## `.codex/skills/` — the same method, for Codex CLI
 
 Codex CLI discovers project skills under `<root>/.codex/skills/` (and
@@ -88,6 +93,13 @@ The skills are portable; two things around them are not.
 - **Subagent wording.** Skills that fan work out to subagents describe Claude
   Code's Task tool. Codex has its own subagents, so the work still happens —
   the prose just names the wrong doorbell.
+
+**`_bmad/custom/` has three owners.** The fork's `apply-story-sizing.sh` owns
+`bmad-create-epics-and-stories.toml`; the PrototypeFramework agent-doc sync owns every
+`<skill>.pf.toml` (the layer between a skill's shipped `customize.toml` and the SKU's
+own file); the SKU owns everything else there. `sync-to-sku.sh` writes into
+`_bmad/custom/` only by running `apply-story-sizing.sh` for that one file, and never
+touches a `*.pf.toml` or a SKU-owned override.
 
 ## `tools/sku-tools/` — shared method tooling
 

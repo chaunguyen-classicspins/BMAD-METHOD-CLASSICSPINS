@@ -27,6 +27,7 @@ sys.dont_write_bytecode = True
 
 from config_utils import (  # noqa: E402
     ConfigError,
+    customization_layers,
     load_central_config,
     load_customization,
     load_toml,
@@ -122,7 +123,7 @@ def _declares(defaults: dict[str, Any], path: str) -> bool:
 def _check_persistent_layers(project_root: Path, skill_dir: Path, defaults: dict[str, Any] | None) -> None:
     """A persistent override may only set keys the skill declares; a stale or misspelled key halts."""
     custom_dir = project_root / "_bmad" / "custom"
-    for layer in (custom_dir / f"{skill_dir.name}.toml", custom_dir / f"{skill_dir.name}.user.toml"):
+    for layer in customization_layers(custom_dir, skill_dir.name):
         undeclared = sorted(path for path in _leaf_paths(load_toml(layer)) if not _declares(defaults or {}, path))
         if undeclared:
             raise RenderError(f"{layer} sets keys {skill_dir.name} does not declare: {', '.join(undeclared)}")

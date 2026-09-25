@@ -61,15 +61,22 @@ That file is the schema: read it to see what is customizable. Never edit
 it; updates overwrite it. Instead, create sparse override files that
 contain only the fields you change.
 
-**Three layers.** The resolver reads three files and the highest wins:
+**Four layers.** The resolver reads four files and the highest wins:
 
 ```text
 Priority 1 (wins): _bmad/custom/<skill>.user.toml   (personal, gitignored)
 Priority 2:        _bmad/custom/<skill>.toml        (team, committed)
-Priority 3 (base): the skill's own customize.toml   (shipped defaults)
+Priority 3:        _bmad/custom/<skill>.pf.toml     (PrototypeFramework, generated)
+Priority 4 (base): the skill's own customize.toml   (shipped defaults)
 ```
 
 `_bmad/custom/` starts empty. Files appear only when someone customizes.
+
+`<skill>.pf.toml` exists only in a project that consumes the ClassicSpins
+PrototypeFramework. Its agent-doc sync (`Framework/Agent Docs/Sync`, or
+`Tools/Build/pf-build.sh agentdocs`) writes it and its `--check` reports any
+drift, so never edit it by hand: the next sync reverts the edit. Put the
+project's own overrides in `<skill>.toml`, which layers on top of it.
 
 **Four rules, by shape.** The resolver does not treat fields differently by
 name; the merge depends only on the value's shape:
